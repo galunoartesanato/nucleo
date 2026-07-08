@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Núcleo — Sistema Interno do Escritório</title>
+<title>Núcleo Galuno — Sistema Interno do Escritório</title>
 <style>
 :root{
   --surface-1:#ffffff; --surface-2:#f9f9f7; --surface-3:#f3f3f0;
@@ -239,7 +239,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
 <!-- ============ TELA DE LOGIN ============ -->
 <div class="auth-wrap" id="authWrap">
   <div class="auth-card">
-    <div class="auth-brand"><div class="logo">N</div><div class="nm">Núcleo</div></div>
+    <div class="auth-brand"><div class="logo">NG</div><div class="nm">Núcleo Galuno</div></div>
     <div class="auth-sub">Sistema interno do escritório</div>
     <div id="setupNote" class="hidden"></div>
     <div id="authForm">
@@ -257,12 +257,23 @@ input,textarea,select{font-family:inherit;font-size:14px}
   </div>
 </div>
 
+<!-- ============ TELA DE ESPERA (Novo membro, sem acesso) ============ -->
+<div class="auth-wrap hidden" id="waitingWrap">
+  <div class="auth-card" style="text-align:center">
+    <div class="auth-brand"><div class="logo">NG</div><div class="nm">Núcleo Galuno</div></div>
+    <div style="font-size:46px;margin:6px 0 2px">⏳</div>
+    <h2 id="waitHi" style="font-size:18px;margin-bottom:8px">Conta criada!</h2>
+    <p style="color:var(--text-2);font-size:14px;line-height:1.6;margin-bottom:20px">Sua conta foi criada com sucesso e está <b>aguardando a liberação de acesso</b> pelo administrador. Assim que seu acesso for liberado, esta tela abre o sistema automaticamente.</p>
+    <button class="btn ghost block" onclick="doLogout()">Sair</button>
+  </div>
+</div>
+
 <!-- ============ APP ============ -->
 <div class="app hidden" id="appRoot">
   <aside class="sidebar">
     <div class="brand">
-      <div class="logo">N</div>
-      <div class="name">Núcleo<small>Sistema do escritório</small></div>
+      <div class="logo">NG</div>
+      <div class="name">Núcleo Galuno<small>Sistema do escritório</small></div>
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-spacer"></div>
@@ -309,6 +320,19 @@ const statusOf=id=>STATUS.find(s=>s.id===id)||STATUS[0];
 let sb=null, currentUser=null, currentProfile=null;
 let DB={people:[],projects:[],tasks:[],posts:[]};
 let confirmMsg=null, authErrMsg=null;
+
+/* ---------- Níveis de acesso ---------- */
+let myLevel='novo';
+const LEVELS=[
+  {id:'novo',    label:'Novo membro',   color:'#898781', bg:'var(--surface-3)'},
+  {id:'membro',  label:'Membro',        color:'#2a78d6', bg:'var(--brand-wash)'},
+  {id:'gerente', label:'Gerente',       color:'#5a45c9', bg:'#ece9fb'},
+  {id:'admin',   label:'Administrador', color:'#0ca30c', bg:'var(--good-wash)'},
+];
+const levelOf=id=>LEVELS.find(l=>l.id===id)||LEVELS[0];
+const isAdmin=()=>myLevel==='admin';
+const isManager=()=>myLevel==='gerente'||myLevel==='admin';
+function canDeleteTask(t){return isManager()||(t&&(t.createdBy===currentUser||t.owner===currentUser));}
 
 // Detecta se a página foi aberta a partir de um link de confirmação de e-mail
 function detectAuthRedirect(){
@@ -360,6 +384,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
 function showAuth(){
   document.getElementById('appRoot').classList.add('hidden');
+  const ww=document.getElementById('waitingWrap'); if(ww) ww.classList.add('hidden');
   document.getElementById('authWrap').classList.remove('hidden');
   if(authErrMsg){ authMsg('Não foi possível confirmar automaticamente: '+authErrMsg+'. Tente fazer login normalmente.','err'); authErrMsg=null; }
   else if(confirmMsg){ authMsg(confirmMsg+' Faça login para entrar.','ok'); confirmMsg=null; }
@@ -411,12 +436,29 @@ async function doLogout(){ await sb.auth.signOut(); currentUser=null; location.r
 
 async function boot(){
   document.getElementById('authWrap').classList.add('hidden');
-  document.getElementById('appRoot').classList.remove('hidden');
   await ensureProfile();
+  myLevel = (currentProfile && currentProfile.level) || 'novo';
+  if(myLevel==='novo'){ showWaiting(); return; }
+  document.getElementById('appRoot').classList.remove('hidden');
   await loadAll();
   subscribeRealtime();
   renderAll();
   if(confirmMsg){ showToast(confirmMsg); confirmMsg=null; }
+}
+function showWaiting(){
+  document.getElementById('authWrap').classList.add('hidden');
+  document.getElementById('appRoot').classList.add('hidden');
+  document.getElementById('waitingWrap').classList.remove('hidden');
+  const first=((currentProfile&&currentProfile.name)||'').split(' ')[0]||'';
+  document.getElementById('waitHi').textContent = first ? ('Olá, '+first+'!') : 'Conta criada!';
+  if(confirmMsg){ showToast(confirmMsg); confirmMsg=null; }
+  // Quando o administrador liberar o acesso, recarrega automaticamente
+  try{
+    sb.channel('nucleo-wait').on('postgres_changes',
+      {event:'UPDATE',schema:'public',table:'profiles',filter:'id=eq.'+currentUser},
+      (p)=>{ if(p&&p.new&&p.new.level&&p.new.level!=='novo'){ location.reload(); } }
+    ).subscribe();
+  }catch(e){}
 }
 async function ensureProfile(){
   let {data}=await sb.from('profiles').select('*').eq('id',currentUser).maybeSingle();
@@ -439,9 +481,9 @@ async function loadAll(){
     sb.from('comments').select('*').order('created_at'),
     sb.from('likes').select('*'),
   ]);
-  DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role}));
+  DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role,level:r.level||'novo'}));
   DB.projects=(pj.data||[]).map(r=>({id:r.id,name:r.name,color:r.color||'#2a78d6'}));
-  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||''}));
+  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',createdBy:r.created_by}));
   const comments=cm.data||[], likes=lk.data||[];
   DB.posts=(po.data||[]).map(r=>({
     id:r.id,author:r.author_id,text:r.text,ts:new Date(r.created_at).getTime(),
@@ -532,7 +574,7 @@ function viewPainel(){
   const mine=open.filter(t=>t.owner===currentUser).sort((a,b)=>(a.due||'z').localeCompare(b.due||'z'));
   const recent=[...DB.tasks].reverse().slice(0,5);
   if(!tasks.length && !DB.projects.length){
-    return `<div class="empty" style="padding:80px 20px"><div class="ei">🚀</div><h2 style="color:var(--text-1);margin:10px 0 6px">Bem-vindo ao Núcleo!</h2>Comece criando um projeto em <b>Projetos</b> e depois adicione tarefas.<br>Convide sua equipe pela tela de login.</div>`;
+    return `<div class="empty" style="padding:80px 20px"><div class="ei">🚀</div><h2 style="color:var(--text-1);margin:10px 0 6px">Bem-vindo ao Núcleo Galuno!</h2>Comece criando um projeto em <b>Projetos</b> e depois adicione tarefas.<br>Convide sua equipe pela tela de login.</div>`;
   }
   return `
   <div class="kpis">
@@ -588,7 +630,7 @@ function viewTarefas(){
       <td><span class="prio ${t.prio}">${t.prio}</span></td>
       <td><span style="font-size:12.5px;color:${t.due&&daysUntil(t.due)<0&&t.status!=='done'?'var(--critical)':'var(--text-2)'};font-weight:600">${t.due?dueLabel(t.due):'—'}</span></td>
       <td><select onchange="setStatus('${t.id}',this.value)" style="border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--surface-2);color:${s.color};font-weight:700;font-size:12px;outline:none">${STATUS.map(o=>`<option value="${o.id}" ${o.id===t.status?'selected':''}>${o.label}</option>`).join('')}</select></td>
-      <td><div style="display:flex"><button class="icon-btn" onclick="openTaskModal('${t.id}')" title="Editar">✎</button><button class="icon-btn" onclick="delTask('${t.id}')" title="Excluir">🗑</button></div></td>
+      <td><div style="display:flex"><button class="icon-btn" onclick="openTaskModal('${t.id}')" title="Editar">✎</button>${canDeleteTask(t)?`<button class="icon-btn" onclick="delTask('${t.id}')" title="Excluir">🗑</button>`:''}</div></td>
     </tr>`;}).join('')}
     </tbody></table>`:'<div class="empty"><div class="ei">📋</div>Nenhuma tarefa encontrada.</div>'}
   </div>`;
@@ -617,7 +659,7 @@ function openProject(id){currentProject=id;renderView();}
 /* ---------- KANBAN ---------- */
 function viewKanban(){
   const ts=DB.tasks.filter(t=>t.proj===currentProject);
-  return `<button class="btn ghost sm" onclick="currentProject=null;renderView()" style="margin-bottom:16px">← Voltar aos projetos</button>
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="btn ghost sm" onclick="currentProject=null;renderView()">← Voltar aos projetos</button><div style="flex:1"></div>${isManager()?`<button class="btn ghost sm" style="color:var(--critical)" onclick="delProject('${currentProject}')">🗑 Excluir projeto</button>`:''}</div>
   <div class="kanban">${STATUS.map(s=>{
     const col=ts.filter(t=>t.status===s.id);
     return `<div class="kcol" data-status="${s.id}"><h3><span class="dot" style="background:${s.raw}"></span>${s.label}<span class="count">${col.length}</span></h3>
@@ -661,19 +703,46 @@ async function addComment(id,v){v=v.trim();if(!v)return;await sb.from('comments'
 
 /* ---------- EQUIPE ---------- */
 function viewEquipe(){
-  return `<div class="team-grid">
-    ${DB.people.map(p=>{
+  const canManage=isManager();
+  const ord={admin:0,gerente:1,membro:2,novo:3};
+  const people=DB.people.slice().sort((a,b)=>(ord[a.level]??9)-(ord[b.level]??9)||a.name.localeCompare(b.name));
+  const info=canManage?`<div class="card pad" style="margin-bottom:16px;display:flex;gap:11px;align-items:flex-start"><span style="font-size:20px">🔐</span><div style="font-size:13px;color:var(--text-2);line-height:1.5">${isAdmin()?'Como <b>administrador</b>, você define o nível de acesso de cada pessoa. Todo novo cadastro entra como <b>Novo membro</b> (sem acesso a nada) até você liberar.':'Como <b>gerente</b>, você pode liberar novos cadastros (Novo membro → Membro). Só o administrador promove alguém a <b>Gerente</b> ou <b>Administrador</b>.'}</div></div>`:'';
+  return `${info}<div class="team-grid">
+    ${people.map(p=>{
       const ts=DB.tasks.filter(t=>t.owner===p.id);
       const open=ts.filter(t=>t.status!=='done').length;
       const done=ts.filter(t=>t.status==='done').length;
-      return `<div class="member">${avatar(p.id,'lg')}<div class="mn">${esc(p.name)}${p.id===currentUser?' <span style="color:var(--brand);font-size:11px">(você)</span>':''}</div><div class="mr">${esc(p.role)}</div><div class="mstats"><div><b>${open}</b><span>Abertas</span></div><div><b>${done}</b><span>Feitas</span></div><div><b>${ts.length}</b><span>Total</span></div></div></div>`;
+      const lv=levelOf(p.level);
+      return `<div class="member">${avatar(p.id,'lg')}
+        <div class="mn">${esc(p.name)}${p.id===currentUser?' <span style="color:var(--brand);font-size:11px">(você)</span>':''}</div>
+        <div class="mr">${esc(p.role)}</div>
+        <span class="tag" style="background:${lv.bg};color:${lv.color};margin-top:9px">${lv.label}</span>
+        ${levelControl(p)}
+        <div class="mstats"><div><b>${open}</b><span>Abertas</span></div><div><b>${done}</b><span>Feitas</span></div><div><b>${ts.length}</b><span>Total</span></div></div>
+      </div>`;
     }).join('')}
     <div class="member" style="cursor:pointer;border-style:dashed;justify-content:center;color:var(--muted)" onclick="openInviteInfo()"><div style="font-size:30px">＋</div><div class="mn" style="color:var(--text-2)">Convidar pessoa</div><div class="mr">como adicionar</div></div>
   </div>`;
 }
+function levelControl(p){
+  if(p.id===currentUser) return '';
+  const sel='margin-top:10px;width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:var(--surface-2);color:var(--text-1);font-weight:600;font-size:12px;outline:none';
+  if(isAdmin()){
+    return `<select onchange="setUserLevel('${p.id}',this.value)" style="${sel}">${LEVELS.map(l=>`<option value="${l.id}" ${p.level===l.id?'selected':''}>${l.label}</option>`).join('')}</select>`;
+  }
+  if(myLevel==='gerente' && (p.level==='novo'||p.level==='membro')){
+    return `<select onchange="setUserLevel('${p.id}',this.value)" style="${sel}"><option value="novo" ${p.level==='novo'?'selected':''}>Novo membro (sem acesso)</option><option value="membro" ${p.level==='membro'?'selected':''}>Membro (com acesso)</option></select>`;
+  }
+  return '';
+}
+async function setUserLevel(id,level){
+  const {error}=await sb.from('profiles').update({level}).eq('id',id);
+  if(error){ showToast('⚠️ Não foi possível alterar: '+(error.message||'sem permissão')); }
+  await reload();
+}
 function openInviteInfo(){
   $('#modal').innerHTML=`<div class="modal-head"><h3>Convidar uma pessoa</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
-    <div class="modal-body"><p style="color:var(--text-2);line-height:1.6">Cada pessoa entra criando a própria conta na <b>tela de login</b> do sistema. É só compartilhar o endereço (URL) do Núcleo e pedir para clicar em <b>"Criar conta"</b>, informando nome, cargo, e-mail e senha.</p><p style="color:var(--muted);font-size:12.5px">Assim que a pessoa se cadastra, ela aparece automaticamente aqui na Equipe e pode receber tarefas.</p></div>
+    <div class="modal-body"><p style="color:var(--text-2);line-height:1.6">Cada pessoa entra criando a própria conta na <b>tela de login</b> do sistema. É só compartilhar o endereço (URL) do Núcleo Galuno e pedir para clicar em <b>"Criar conta"</b>, informando nome, cargo, e-mail e senha.</p><p style="color:var(--muted);font-size:12.5px">Assim que a pessoa se cadastra, ela aparece automaticamente aqui na Equipe e pode receber tarefas.</p></div>
     <div class="modal-foot"><button class="btn" onclick="closeModal()">Entendi</button></div>`;
   $('#overlay').classList.add('open');
 }
@@ -703,7 +772,13 @@ function calNav(dir){calMonth.m+=dir;if(calMonth.m<0){calMonth.m=11;calMonth.y--
 /* ---------- Ações de tarefa ---------- */
 async function toggleDone(id){const t=DB.tasks.find(x=>x.id===id);const st=t.status==='done'?'todo':'done';t.status=st;renderView();renderNav();await sb.from('tasks').update({status:st}).eq('id',id);}
 async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);t.status=s;await sb.from('tasks').update({status:s}).eq('id',id);renderView();renderNav();}
-async function delTask(id){await sb.from('tasks').delete().eq('id',id);await reload();}
+async function delTask(id){const {error}=await sb.from('tasks').delete().eq('id',id);if(error){showToast('⚠️ Sem permissão para excluir esta tarefa.');}await reload();}
+async function delProject(id){
+  if(!confirm('Excluir este projeto? As tarefas ligadas a ele continuarão existindo, mas sem projeto.')) return;
+  const {error}=await sb.from('projects').delete().eq('id',id);
+  if(error){ showToast('⚠️ Sem permissão para excluir projeto.'); return; }
+  currentProject=null; await reload();
+}
 
 /* ---------- Modais ---------- */
 function closeModal(){$('#overlay').classList.remove('open');}
@@ -725,7 +800,7 @@ function openTaskModal(id){
       </div>
       <div class="field"><label>Status</label><select id="f_status">${STATUS.map(s=>`<option value="${s.id}" ${t&&t.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
     </div>
-    <div class="modal-foot">${t?`<button class="btn ghost" onclick="delTask('${t.id}');closeModal()" style="margin-right:auto;color:var(--critical)">Excluir</button>`:''}<button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" id="saveTaskBtn" onclick="saveTask(${t?`'${t.id}'`:'null'})">Salvar</button></div>`;
+    <div class="modal-foot">${t&&canDeleteTask(t)?`<button class="btn ghost" onclick="delTask('${t.id}');closeModal()" style="margin-right:auto;color:var(--critical)">Excluir</button>`:''}<button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" id="saveTaskBtn" onclick="saveTask(${t?`'${t.id}'`:'null'})">Salvar</button></div>`;
   $('#overlay').classList.add('open');
   setTimeout(()=>$('#f_title').focus(),50);
 }
