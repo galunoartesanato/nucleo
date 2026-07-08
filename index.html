@@ -201,6 +201,23 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .field input,.field textarea,.field select{width:100%;border:1px solid var(--border);border-radius:var(--radius-s);padding:10px 12px;background:var(--surface-2);color:var(--text-1);outline:none}
 .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--brand)}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* chips de liderados */
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip-pick{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-size:12.5px;font-weight:600;color:var(--text-2);user-select:none}
+.chip-pick.on{background:var(--brand-wash);border-color:var(--brand);color:var(--brand)}
+.chip-pick.on::before{content:'✓ '}
+.chip-pick.dis{opacity:.4;cursor:not-allowed}
+/* checklist de subtarefas */
+.subs{display:flex;flex-direction:column;gap:7px}
+.sub{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
+.sub .stitle{flex:1;font-size:13px}
+.sub.checked .stitle{text-decoration:line-through;color:var(--muted)}
+.sub .sassign{font-size:11px;color:var(--muted);white-space:nowrap}
+.sub .sx{cursor:pointer;color:var(--muted);font-size:14px;border:none;background:none}
+.sub-add{display:flex;gap:8px;margin-top:9px}
+.sub-add input{flex:1}
+.readonly-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px}
+.note-sm{font-size:12px;color:var(--muted);background:var(--surface-3);padding:9px 12px;border-radius:8px}
 .modal-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
 .empty{text-align:center;padding:50px 20px;color:var(--muted)}
 .empty .ei{font-size:40px;opacity:.4}
@@ -351,7 +368,16 @@ const LEVELS=[
 const levelOf=id=>LEVELS.find(l=>l.id===id)||LEVELS[0];
 const isAdmin=()=>myLevel==='admin';
 const isManager=()=>myLevel==='gerente'||myLevel==='admin';
-function canDeleteTask(t){return isManager()||(t&&(t.createdBy===currentUser||t.owner===currentUser));}
+// Escadinha (espelha o RLS): quem pode editar/mexer numa tarefa
+function canEditTask(t){
+  if(!t) return true; // nova tarefa
+  if(isAdmin()) return true;
+  if(t.owner===currentUser) return true;
+  if(myLevel==='gerente' && person(t.owner).level!=='admin') return true;
+  return false;
+}
+function isLiderado(t){return !!(t && (t.liderados||[]).includes(currentUser));}
+function canDeleteTask(t){return canEditTask(t)||(t&&t.createdBy===currentUser);}
 
 // Detecta se a página foi aberta a partir de um link de confirmação de e-mail
 function detectAuthRedirect(){
@@ -545,17 +571,22 @@ async function ensureProfile(){
 
 /* ---------- Data layer ---------- */
 async function loadAll(){
-  const [pf,pj,tk,po,cm,lk]=await Promise.all([
+  const [pf,pj,tk,po,cm,lk,ta,st]=await Promise.all([
     sb.from('profiles').select('*').order('created_at'),
     sb.from('projects').select('*').order('created_at'),
     sb.from('tasks').select('*').order('created_at'),
     sb.from('posts').select('*').order('created_at'),
     sb.from('comments').select('*').order('created_at'),
     sb.from('likes').select('*'),
+    sb.from('task_assignees').select('*'),
+    sb.from('subtasks').select('*').order('created_at'),
   ]);
   DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role,level:r.level||'novo'}));
   DB.projects=(pj.data||[]).map(r=>({id:r.id,name:r.name,color:r.color||'#2a78d6'}));
-  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',createdBy:r.created_by}));
+  const assignees=ta.data||[], subs=st.data||[];
+  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',createdBy:r.created_by,
+    liderados:assignees.filter(a=>a.task_id===r.id).map(a=>a.user_id),
+    subtasks:subs.filter(s=>s.task_id===r.id).map(s=>({id:s.id,title:s.title,done:!!s.done,assignee:s.assignee_id,createdBy:s.created_by}))}));
   const comments=cm.data||[], likes=lk.data||[];
   DB.posts=(po.data||[]).map(r=>({
     id:r.id,author:r.author_id,text:r.text,ts:new Date(r.created_at).getTime(),
@@ -643,7 +674,7 @@ function viewPainel(){
   const overdue=open.filter(t=>t.due&&daysUntil(t.due)<0);
   const byStatus=STATUS.map(s=>({...s,n:tasks.filter(t=>t.status===s.id).length}));
   const max=Math.max(1,...byStatus.map(s=>s.n));
-  const mine=open.filter(t=>t.owner===currentUser).sort((a,b)=>(a.due||'z').localeCompare(b.due||'z'));
+  const mine=open.filter(t=>t.owner===currentUser||(t.liderados||[]).includes(currentUser)).sort((a,b)=>(a.due||'z').localeCompare(b.due||'z'));
   const recent=[...DB.tasks].reverse().slice(0,5);
   if(!tasks.length && !DB.projects.length){
     return `<div class="empty" style="padding:80px 20px"><div class="ei">🚀</div><h2 style="color:var(--text-1);margin:10px 0 6px">Bem-vindo ao Núcleo Galuno!</h2>Comece criando um projeto em <b>Projetos</b> e depois adicione tarefas.<br>Convide sua equipe pela tela de login.</div>`;
@@ -673,8 +704,8 @@ function viewPainel(){
   </div>`;
 }
 function rowTask(t){
-  const s=statusOf(t.status);
-  return `<div class="li"><div class="chk ${t.status==='done'?'done':''}" onclick="toggleDone('${t.id}')">${t.status==='done'?'✓':''}</div><div class="t"><div class="tt">${esc(t.title)}</div><div class="ts">${project(t.proj)?esc(project(t.proj).name)+' · ':''}${t.due?dueLabel(t.due):'sem prazo'}</div></div><span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${s.raw}"></span>${s.label}</span></div>`;
+  const s=statusOf(t.status);const ed=canEditTask(t);
+  return `<div class="li"><div class="chk ${t.status==='done'?'done':''}" ${ed?`onclick="toggleDone('${t.id}')"`:'style="opacity:.45;cursor:default"'}>${t.status==='done'?'✓':''}</div><div class="t" style="cursor:pointer" onclick="openTaskModal('${t.id}')"><div class="tt">${esc(t.title)}</div><div class="ts">${project(t.proj)?esc(project(t.proj).name)+' · ':''}${t.due?dueLabel(t.due):'sem prazo'}</div></div><span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${s.raw}"></span>${s.label}</span></div>`;
 }
 
 /* ---------- TAREFAS ---------- */
@@ -694,15 +725,15 @@ function viewTarefas(){
   </div>
   <div class="card pad">
     ${tasks.length?`<table class="ttable"><thead><tr><th style="width:34px"></th><th>Tarefa</th><th>Projeto</th><th>Responsável</th><th>Prioridade</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>
-    ${tasks.map(t=>{const s=statusOf(t.status);const p=project(t.proj);return `<tr>
-      <td><div class="chk ${t.status==='done'?'done':''}" onclick="toggleDone('${t.id}')">${t.status==='done'?'✓':''}</div></td>
-      <td class="title-cell">${esc(t.title)}${t.desc?`<small>${esc(t.desc)}</small>`:''}</td>
+    ${tasks.map(t=>{const s=statusOf(t.status);const p=project(t.proj);const ed=canEditTask(t);const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<tr>
+      <td><div class="chk ${t.status==='done'?'done':''}" ${ed?`onclick="toggleDone('${t.id}')"`:'style="opacity:.45;cursor:default"'}>${t.status==='done'?'✓':''}</div></td>
+      <td class="title-cell">${esc(t.title)}${subN?` <span style="font-size:11px;color:var(--muted);font-weight:600">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}</td>
       <td>${p?`<span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:'—'}</td>
-      <td><div style="display:flex;align-items:center;gap:7px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(person(t.owner).name.split(' ')[0])}</span></div></td>
+      <td><div style="display:flex;align-items:center;gap:5px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(person(t.owner).name.split(' ')[0])}</span>${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,3).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></td>
       <td><span class="prio ${t.prio}">${t.prio}</span></td>
       <td><span style="font-size:12.5px;color:${t.due&&daysUntil(t.due)<0&&t.status!=='done'?'var(--critical)':'var(--text-2)'};font-weight:600">${t.due?dueLabel(t.due):'—'}</span></td>
-      <td><select onchange="setStatus('${t.id}',this.value)" style="border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--surface-2);color:${s.color};font-weight:700;font-size:12px;outline:none">${STATUS.map(o=>`<option value="${o.id}" ${o.id===t.status?'selected':''}>${o.label}</option>`).join('')}</select></td>
-      <td><div style="display:flex"><button class="icon-btn" onclick="openTaskModal('${t.id}')" title="Editar">✎</button>${canDeleteTask(t)?`<button class="icon-btn" onclick="delTask('${t.id}')" title="Excluir">🗑</button>`:''}</div></td>
+      <td>${ed?`<select onchange="setStatus('${t.id}',this.value)" style="border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--surface-2);color:${s.color};font-weight:700;font-size:12px;outline:none">${STATUS.map(o=>`<option value="${o.id}" ${o.id===t.status?'selected':''}>${o.label}</option>`).join('')}</select>`:`<span class="readonly-badge" style="background:var(--surface-3);color:${s.color};font-size:12px"><span class="dot" style="background:${s.raw}"></span> ${s.label}</span>`}</td>
+      <td><div style="display:flex"><button class="icon-btn" onclick="openTaskModal('${t.id}')" title="${ed?'Editar':'Ver'}">${ed?'✎':'👁'}</button>${canDeleteTask(t)?`<button class="icon-btn" onclick="delTask('${t.id}')" title="Excluir">🗑</button>`:''}</div></td>
     </tr>`;}).join('')}
     </tbody></table>`:'<div class="empty"><div class="ei">📋</div>Nenhuma tarefa encontrada.</div>'}
   </div>`;
@@ -735,7 +766,7 @@ function viewKanban(){
   <div class="kanban">${STATUS.map(s=>{
     const col=ts.filter(t=>t.status===s.id);
     return `<div class="kcol" data-status="${s.id}"><h3><span class="dot" style="background:${s.raw}"></span>${s.label}<span class="count">${col.length}</span></h3>
-    ${col.map(t=>`<div class="kcard" draggable="true" data-id="${t.id}" onclick="openTaskModal('${t.id}')"><div class="kt">${esc(t.title)}</div><div class="kmeta"><div class="left"><span class="prio ${t.prio}">${t.prio}</span>${t.due?`<span style="font-size:11px;color:${daysUntil(t.due)<0&&s.id!=='done'?'var(--critical)':'var(--muted)'};font-weight:600">${dueLabel(t.due)}</span>`:''}</div>${avatar(t.owner,'sm')}</div></div>`).join('')}
+    ${col.map(t=>{const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<div class="kcard" draggable="${canEditTask(t)?'true':'false'}" data-id="${t.id}" onclick="openTaskModal('${t.id}')"><div class="kt">${esc(t.title)}${subN?` <span style="font-size:10.5px;color:var(--muted);font-weight:600">☑${subD}/${subN}</span>`:''}</div><div class="kmeta"><div class="left"><span class="prio ${t.prio}">${t.prio}</span>${t.due?`<span style="font-size:11px;color:${daysUntil(t.due)<0&&s.id!=='done'?'var(--critical)':'var(--muted)'};font-weight:600">${dueLabel(t.due)}</span>`:''}</div><div style="display:flex;align-items:center">${avatar(t.owner,'sm')}${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,2).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></div></div>`;}).join('')}
     </div>`;
   }).join('')}</div>`;
 }
@@ -842,8 +873,8 @@ function viewCalendario(){
 function calNav(dir){calMonth.m+=dir;if(calMonth.m<0){calMonth.m=11;calMonth.y--;}if(calMonth.m>11){calMonth.m=0;calMonth.y++;}renderView();}
 
 /* ---------- Ações de tarefa ---------- */
-async function toggleDone(id){const t=DB.tasks.find(x=>x.id===id);const st=t.status==='done'?'todo':'done';t.status=st;renderView();renderNav();await sb.from('tasks').update({status:st}).eq('id',id);}
-async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);t.status=s;await sb.from('tasks').update({status:s}).eq('id',id);renderView();renderNav();}
+async function toggleDone(id){const t=DB.tasks.find(x=>x.id===id);if(!t||!canEditTask(t))return;const prev=t.status;const st=t.status==='done'?'todo':'done';t.status=st;renderView();renderNav();const {error}=await sb.from('tasks').update({status:st}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');renderView();renderNav();}}
+async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);if(!t)return;const prev=t.status;t.status=s;const {error}=await sb.from('tasks').update({status:s}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');}renderView();renderNav();}
 async function delTask(id){const {error}=await sb.from('tasks').delete().eq('id',id);if(error){showToast('⚠️ Sem permissão para excluir esta tarefa.');}await reload();}
 async function delProject(id){
   if(!confirm('Excluir este projeto? As tarefas ligadas a ele continuarão existindo, mas sem projeto.')) return;
@@ -857,33 +888,133 @@ function closeModal(){$('#overlay').classList.remove('open');}
 function openTaskModal(id){
   const t=id?DB.tasks.find(x=>x.id===id):null;
   if(!DB.projects.length){alert('Crie um projeto antes de adicionar tarefas.');return;}
-  $('#modal').innerHTML=`
+  window._liderados = t?(t.liderados||[]).slice():[];
+  const editable=canEditTask(t);
+  $('#modal').innerHTML = editable ? editTaskModalHtml(t) : viewTaskModalHtml(t);
+  $('#overlay').classList.add('open');
+  if(editable) setTimeout(()=>{const f=$('#f_title');if(f)f.focus();},50);
+}
+function liderChipsHtml(leaderId){
+  const ppl=DB.people.filter(p=>p.level!=='novo' && p.id!==leaderId);
+  if(!ppl.length) return '<div class="note-sm">Sem outras pessoas com acesso para adicionar.</div>';
+  const sel=window._liderados||[];
+  return ppl.map(p=>`<span class="chip-pick ${sel.includes(p.id)?'on':''}" onclick="toggleLider('${p.id}')">${esc(p.name.split(' ')[0])}</span>`).join('');
+}
+function toggleLider(id){
+  const a=window._liderados||(window._liderados=[]);
+  const i=a.indexOf(id); if(i>=0)a.splice(i,1); else a.push(id);
+  const leader=$('#f_owner')?$('#f_owner').value:null;
+  const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(leader);
+}
+function onLeaderChange(v){
+  window._liderados=(window._liderados||[]).filter(u=>u!==v);
+  const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
+}
+function subAssigneeOptions(){
+  const ppl=DB.people.filter(p=>p.level!=='novo');
+  return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}">${esc(p.name.split(' ')[0])}</option>`).join('');
+}
+function subListHtml(taskId){
+  const t=DB.tasks.find(x=>x.id===taskId); if(!t) return '';
+  if(!t.subtasks||!t.subtasks.length) return '<div class="note-sm">Nenhuma subtarefa ainda.</div>';
+  return t.subtasks.map(s=>{
+    const canCheck=canEditTask(t)||s.assignee===currentUser||s.createdBy===currentUser;
+    const canRemove=canEditTask(t)||s.createdBy===currentUser;
+    return `<div class="sub ${s.done?'checked':''}">
+      <div class="chk ${s.done?'done':''}" ${canCheck?`onclick="toggleSubtask('${s.id}','${taskId}')"`:'style="opacity:.45;cursor:default"'}>${s.done?'✓':''}</div>
+      <div class="stitle">${esc(s.title)}</div>
+      ${s.assignee?`<span class="sassign">${esc(person(s.assignee).name.split(' ')[0])}</span>`:''}
+      ${canRemove?`<button class="sx" onclick="delSubtask('${s.id}','${taskId}')" title="Excluir">✕</button>`:''}
+    </div>`;
+  }).join('');
+}
+function editTaskModalHtml(t){
+  const leader = t?t.owner:currentUser;
+  return `
     <div class="modal-head"><h3>${t?'Editar tarefa':'Nova tarefa'}</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
       <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div>
       <div class="field-row">
         <div class="field"><label>Projeto</label><select id="f_proj">${DB.projects.map(p=>`<option value="${p.id}" ${t&&t.proj===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
-        <div class="field"><label>Responsável</label><select id="f_owner">${DB.people.map(p=>`<option value="${p.id}" ${t?(t.owner===p.id?'selected':''):(p.id===currentUser?'selected':'')}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
       </div>
+      <div class="field"><label>Liderados (outros responsáveis)</label><div class="chips" id="liderChips">${liderChipsHtml(leader)}</div></div>
       <div class="field-row">
         <div class="field"><label>Prioridade</label><select id="f_prio"><option value="baixa" ${t&&t.prio==='baixa'?'selected':''}>Baixa</option><option value="media" ${!t||t.prio==='media'?'selected':''}>Média</option><option value="alta" ${t&&t.prio==='alta'?'selected':''}>Alta</option></select></div>
         <div class="field"><label>Prazo</label><input type="date" id="f_due" value="${t?t.due||'':''}"></div>
       </div>
       <div class="field"><label>Status</label><select id="f_status">${STATUS.map(s=>`<option value="${s.id}" ${t&&t.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
+      ${t?`<div class="field"><label>Subtarefas (checklist)</label><div class="subs" id="subList">${subListHtml(t.id)}</div>
+        <div class="sub-add"><input id="f_subtitle" placeholder="Nova subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask('${t.id}')}"><select id="f_subassignee" style="max-width:150px">${subAssigneeOptions()}</select><button class="btn" onclick="addSubtask('${t.id}')">＋</button></div></div>`
+      :`<div class="note-sm">Salve a tarefa para poder adicionar subtarefas (checklist).</div>`}
     </div>
     <div class="modal-foot">${t&&canDeleteTask(t)?`<button class="btn ghost" onclick="delTask('${t.id}');closeModal()" style="margin-right:auto;color:var(--critical)">Excluir</button>`:''}<button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" id="saveTaskBtn" onclick="saveTask(${t?`'${t.id}'`:'null'})">Salvar</button></div>`;
-  $('#overlay').classList.add('open');
-  setTimeout(()=>$('#f_title').focus(),50);
+}
+function viewTaskModalHtml(t){
+  const s=statusOf(t.status), p=project(t.proj);
+  const lids=(t.liderados||[]);
+  return `
+    <div class="modal-head"><h3>Tarefa</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Título</label><div style="font-weight:650;font-size:15px">${esc(t.title)}</div></div>
+      ${t.desc?`<div class="field"><label>Descrição</label><div style="font-size:13px;color:var(--text-2);line-height:1.5">${esc(t.desc)}</div></div>`:''}
+      <div class="field-row">
+        <div class="field"><label>Projeto</label><div style="font-size:13px">${p?esc(p.name):'—'}</div></div>
+        <div class="field"><label>Líder (responsável)</label><div style="display:flex;align-items:center;gap:7px">${avatar(t.owner,'sm')}<span style="font-size:13px">${esc(person(t.owner).name)}</span></div></div>
+      </div>
+      ${lids.length?`<div class="field"><label>Liderados</label><div class="chips">${lids.map(id=>`<span class="chip-pick on" style="cursor:default">${esc(person(id).name.split(' ')[0])}</span>`).join('')}</div></div>`:''}
+      <div class="field-row">
+        <div class="field"><label>Prioridade</label><div><span class="prio ${t.prio}">${t.prio}</span></div></div>
+        <div class="field"><label>Status</label><div><span class="readonly-badge" style="background:var(--surface-3);color:${s.color}"><span class="dot" style="background:${s.raw}"></span> ${s.label}</span></div></div>
+      </div>
+      <div class="note-sm">Você é <b>liderado</b> nesta tarefa: pode acompanhar e criar subtarefas designadas a você.</div>
+      <div class="field"><label>Subtarefas (checklist)</label><div class="subs" id="subList">${subListHtml(t.id)}</div>
+        <div class="sub-add"><input id="f_subtitle" placeholder="Nova subtarefa (sua)..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask('${t.id}')}"><button class="btn" onclick="addSubtask('${t.id}')">＋</button></div></div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Fechar</button></div>`;
 }
 async function saveTask(id){
-  const g=x=>$('#f_'+x).value;
-  const title=g('title').trim();if(!title){$('#f_title').style.borderColor='var(--critical)';return;}
+  const g=x=>{const e=$('#f_'+x);return e?e.value:'';};
+  const title=g('title').trim();if(!title){const e=$('#f_title');if(e)e.style.borderColor='var(--critical)';return;}
   const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null};
   const btn=$('#saveTaskBtn');if(btn)btn.disabled=true;
-  if(id){await sb.from('tasks').update(row).eq('id',id);}
-  else{row.created_by=currentUser;await sb.from('tasks').insert(row);}
+  let taskId=id;
+  if(id){ const {error}=await sb.from('tasks').update(row).eq('id',id); if(error){showToast('⚠️ Sem permissão para editar esta tarefa.');if(btn)btn.disabled=false;return;} }
+  else{ row.created_by=currentUser; const {data,error}=await sb.from('tasks').insert(row).select('id').single(); if(error||!data){showToast('⚠️ Não foi possível salvar a tarefa.');if(btn)btn.disabled=false;return;} taskId=data.id; }
+  // sincroniza liderados (co-responsáveis), sem incluir o próprio líder
+  const want=(window._liderados||[]).filter(u=>u!==row.owner_id);
+  const orig=id?(((DB.tasks.find(x=>x.id===id))||{}).liderados||[]):[];
+  const toDel=orig.filter(u=>!want.includes(u));
+  const toAdd=want.filter(u=>!orig.includes(u));
+  for(const u of toDel){ await sb.from('task_assignees').delete().eq('task_id',taskId).eq('user_id',u); }
+  if(toAdd.length){ await sb.from('task_assignees').insert(toAdd.map(u=>({task_id:taskId,user_id:u}))); }
   closeModal();await reload();
+}
+async function addSubtask(taskId){
+  const inp=$('#f_subtitle'); const title=(inp?inp.value:'').trim();
+  if(!title){if(inp)inp.style.borderColor='var(--critical)';return;}
+  const asel=$('#f_subassignee'); const assignee = asel?(asel.value||null):currentUser;
+  const {error}=await sb.from('subtasks').insert({task_id:taskId,title,assignee_id:assignee});
+  if(error){showToast('⚠️ Não foi possível adicionar a subtarefa.');return;}
+  if(inp){inp.value='';inp.style.borderColor='';}
+  await refreshSubs(taskId);
+}
+async function toggleSubtask(subId,taskId){
+  const t=DB.tasks.find(x=>x.id===taskId); const s=t&&t.subtasks.find(x=>x.id===subId); if(!s)return;
+  const {error}=await sb.from('subtasks').update({done:!s.done}).eq('id',subId);
+  if(error){showToast('⚠️ Sem permissão para alterar esta subtarefa.');return;}
+  await refreshSubs(taskId);
+}
+async function delSubtask(subId,taskId){
+  const {error}=await sb.from('subtasks').delete().eq('id',subId);
+  if(error){showToast('⚠️ Sem permissão para excluir esta subtarefa.');return;}
+  await refreshSubs(taskId);
+}
+async function refreshSubs(taskId){
+  await loadAll();
+  const el=$('#subList'); if(el) el.innerHTML=subListHtml(taskId);
+  renderView(); renderNav();
 }
 function openProjectModal(){
   window._pcolor=AVCOLORS[0];
