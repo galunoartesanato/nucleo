@@ -223,6 +223,9 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .auth-msg{font-size:12.5px;padding:10px 12px;border-radius:8px;margin-bottom:13px;display:none}
 .auth-msg.err{display:block;background:var(--crit-wash);color:var(--critical)}
 .auth-msg.ok{display:block;background:var(--good-wash);color:var(--good)}
+.auth-links{text-align:center;margin-top:14px}
+.auth-links a{font-size:12.5px;font-weight:650;color:var(--brand);cursor:pointer;text-decoration:none}
+.auth-links a:hover{text-decoration:underline}
 .setup-note{background:var(--warn-wash);color:var(--warning);border-radius:10px;padding:14px;font-size:13px;line-height:1.5}
 
 @media(max-width:900px){
@@ -243,7 +246,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
     <div class="auth-sub">Sistema interno do escritório</div>
     <div id="setupNote" class="hidden"></div>
     <div id="authForm">
-      <div class="auth-tabs">
+      <div class="auth-tabs" id="authTabs">
         <button id="tabLogin" class="active" onclick="authTab('login')">Entrar</button>
         <button id="tabSignup" onclick="authTab('signup')">Criar conta</button>
       </div>
@@ -251,8 +254,12 @@ input,textarea,select{font-family:inherit;font-size:14px}
       <div class="auth-field signup-only hidden"><label>Nome completo</label><input id="auName" placeholder="Ex: Gabriel Noris"></div>
       <div class="auth-field signup-only hidden"><label>Cargo / função</label><input id="auRole" placeholder="Ex: Sócio-diretor"></div>
       <div class="auth-field"><label>E-mail</label><input id="auEmail" type="email" placeholder="voce@empresa.com" autocomplete="email"></div>
-      <div class="auth-field"><label>Senha</label><input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="auth-field" id="auPassField"><label>Senha</label><input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
       <button class="btn block" id="authSubmit" onclick="authSubmit()">Entrar</button>
+      <div class="auth-links">
+        <a id="forgotLink" onclick="authTab('recover')">Esqueci minha senha</a>
+        <a id="backLoginLink" class="hidden" onclick="authTab('login')">← Voltar para o login</a>
+      </div>
     </div>
   </div>
 </div>
@@ -265,6 +272,18 @@ input,textarea,select{font-family:inherit;font-size:14px}
     <h2 id="waitHi" style="font-size:18px;margin-bottom:8px">Conta criada!</h2>
     <p style="color:var(--text-2);font-size:14px;line-height:1.6;margin-bottom:20px">Sua conta foi criada com sucesso e está <b>aguardando a liberação de acesso</b> pelo administrador. Assim que seu acesso for liberado, esta tela abre o sistema automaticamente.</p>
     <button class="btn ghost block" onclick="doLogout()">Sair</button>
+  </div>
+</div>
+
+<!-- ============ TELA DE NOVA SENHA (recuperação) ============ -->
+<div class="auth-wrap hidden" id="newpassWrap">
+  <div class="auth-card">
+    <div class="auth-brand"><div class="logo">NG</div><div class="nm">Núcleo Galuno</div></div>
+    <div class="auth-sub">Defina uma nova senha</div>
+    <div class="auth-msg" id="npMsg"></div>
+    <div class="auth-field"><label>Nova senha</label><input id="npPass" type="password" placeholder="••••••••" autocomplete="new-password"></div>
+    <div class="auth-field"><label>Confirmar nova senha</label><input id="npPass2" type="password" placeholder="••••••••" autocomplete="new-password"></div>
+    <button class="btn block" id="npSubmit" onclick="saveNewPassword()">Salvar nova senha</button>
   </div>
 </div>
 
@@ -319,7 +338,7 @@ const statusOf=id=>STATUS.find(s=>s.id===id)||STATUS[0];
 
 let sb=null, currentUser=null, currentProfile=null;
 let DB={people:[],projects:[],tasks:[],posts:[]};
-let confirmMsg=null, authErrMsg=null;
+let confirmMsg=null, authErrMsg=null, recoveryMode=false;
 
 /* ---------- Níveis de acesso ---------- */
 let myLevel='novo';
@@ -342,7 +361,9 @@ function detectAuthRedirect(){
     const qp = new URLSearchParams(window.location.search);
     const type = hp.get('type') || qp.get('type');
     authErrMsg = hp.get('error_description') || qp.get('error_description');
-    if(type==='signup' || type==='magiclink' || type==='email_change' || (qp.get('code') && !type)){
+    if(type==='recovery'){
+      recoveryMode = true;
+    } else if(type==='signup' || type==='magiclink' || type==='email_change' || (qp.get('code') && !type)){
       confirmMsg = 'Seu e-mail foi confirmado com sucesso! 🎉';
     }
   }catch(e){}
@@ -372,19 +393,27 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   }
   sb=window.supabase.createClient(window.NUCLEO_CONFIG.SUPABASE_URL, window.NUCLEO_CONFIG.SUPABASE_ANON_KEY);
   detectAuthRedirect();
-  sb.auth.onAuthStateChange((_e,session)=>{
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(event==='PASSWORD_RECOVERY'){ recoveryMode=true; if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
+    if(recoveryMode){ if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
     if(session && session.user){ if(!currentUser){ currentUser=session.user.id; boot(); } }
     else { currentUser=null; showAuth(); }
   });
   const {data:{session}}=await sb.auth.getSession();
-  if(session && session.user){ currentUser=session.user.id; boot(); }
+  if(recoveryMode){
+    if(session && session.user){ currentUser=session.user.id; showNewPassword(); }
+    else { recoveryMode=false; showAuth(); authMsg('O link de recuperação expirou ou é inválido. Use "Esqueci minha senha" para receber um novo.','err'); }
+  }
+  else if(session && session.user){ currentUser=session.user.id; boot(); }
   else { showAuth(); }
   document.getElementById('auPass').addEventListener('keydown',e=>{if(e.key==='Enter')authSubmit();});
+  document.getElementById('npPass2').addEventListener('keydown',e=>{if(e.key==='Enter')saveNewPassword();});
 });
 
 function showAuth(){
   document.getElementById('appRoot').classList.add('hidden');
   const ww=document.getElementById('waitingWrap'); if(ww) ww.classList.add('hidden');
+  const np=document.getElementById('newpassWrap'); if(np) np.classList.add('hidden');
   document.getElementById('authWrap').classList.remove('hidden');
   if(authErrMsg){ authMsg('Não foi possível confirmar automaticamente: '+authErrMsg+'. Tente fazer login normalmente.','err'); authErrMsg=null; }
   else if(confirmMsg){ authMsg(confirmMsg+' Faça login para entrar.','ok'); confirmMsg=null; }
@@ -392,11 +421,16 @@ function showAuth(){
 let authMode='login';
 function authTab(m){
   authMode=m;
-  document.getElementById('tabLogin').classList.toggle('active',m==='login');
-  document.getElementById('tabSignup').classList.toggle('active',m==='signup');
-  document.querySelectorAll('.signup-only').forEach(e=>e.classList.toggle('hidden',m!=='signup'));
-  document.getElementById('authSubmit').textContent = m==='login'?'Entrar':'Criar conta';
-  document.getElementById('auPass').autocomplete = m==='login'?'current-password':'new-password';
+  const isLogin=m==='login', isSignup=m==='signup', isRecover=m==='recover';
+  document.getElementById('tabLogin').classList.toggle('active',isLogin);
+  document.getElementById('tabSignup').classList.toggle('active',isSignup);
+  document.querySelectorAll('.signup-only').forEach(e=>e.classList.toggle('hidden',!isSignup));
+  document.getElementById('authTabs').classList.toggle('hidden',isRecover);
+  document.getElementById('auPassField').classList.toggle('hidden',isRecover);
+  document.getElementById('forgotLink').classList.toggle('hidden',!isLogin);
+  document.getElementById('backLoginLink').classList.toggle('hidden',isLogin);
+  document.getElementById('authSubmit').textContent = isRecover?'Enviar link de recuperação':(isSignup?'Criar conta':'Entrar');
+  document.getElementById('auPass').autocomplete = isLogin?'current-password':'new-password';
   hideAuthMsg();
 }
 function authMsg(t,type){const el=document.getElementById('authMsg');el.textContent=t;el.className='auth-msg '+type;}
@@ -405,6 +439,17 @@ async function authSubmit(){
   const email=document.getElementById('auEmail').value.trim();
   const pass=document.getElementById('auPass').value;
   const btn=document.getElementById('authSubmit');
+  if(authMode==='recover'){
+    if(!email){authMsg('Informe seu e-mail.','err');return;}
+    btn.disabled=true;
+    try{
+      const redirectTo=location.origin+location.pathname+'?type=recovery';
+      const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+      if(error) authMsg(traduz(error.message),'err');
+      else authMsg('Se este e-mail tiver uma conta, enviamos um link para redefinir a senha. Verifique sua caixa de entrada (e o spam).','ok');
+    }catch(e){authMsg('Erro de conexão. Tente novamente.','err');}
+    btn.disabled=false; return;
+  }
   if(!email||!pass){authMsg('Preencha e-mail e senha.','err');return;}
   btn.disabled=true;
   try{
@@ -434,8 +479,34 @@ function traduz(m){
 }
 async function doLogout(){ await sb.auth.signOut(); currentUser=null; location.reload(); }
 
+function showNewPassword(){
+  document.getElementById('appRoot').classList.add('hidden');
+  document.getElementById('authWrap').classList.add('hidden');
+  const ww=document.getElementById('waitingWrap'); if(ww) ww.classList.add('hidden');
+  document.getElementById('newpassWrap').classList.remove('hidden');
+}
+function npMsg(t,type){const el=document.getElementById('npMsg');el.textContent=t;el.className='auth-msg '+(type||'');}
+async function saveNewPassword(){
+  const p1=document.getElementById('npPass').value;
+  const p2=document.getElementById('npPass2').value;
+  const btn=document.getElementById('npSubmit');
+  if(!p1||p1.length<6){npMsg('A senha precisa de ao menos 6 caracteres.','err');return;}
+  if(p1!==p2){npMsg('As senhas não coincidem.','err');return;}
+  btn.disabled=true;
+  try{
+    const {error}=await sb.auth.updateUser({password:p1});
+    if(error){ npMsg(traduz(error.message),'err'); btn.disabled=false; return; }
+    recoveryMode=false;
+    try{ history.replaceState({},'',location.origin+location.pathname); }catch(e){}
+    document.getElementById('newpassWrap').classList.add('hidden');
+    confirmMsg='Senha alterada com sucesso! 🎉';
+    if(currentUser){ boot(); } else { showAuth(); }
+  }catch(e){ npMsg('Erro de conexão. Tente novamente.','err'); btn.disabled=false; }
+}
+
 async function boot(){
   document.getElementById('authWrap').classList.add('hidden');
+  const np=document.getElementById('newpassWrap'); if(np) np.classList.add('hidden');
   await ensureProfile();
   myLevel = (currentProfile && currentProfile.level) || 'novo';
   if(myLevel==='novo'){ showWaiting(); return; }
@@ -448,6 +519,7 @@ async function boot(){
 function showWaiting(){
   document.getElementById('authWrap').classList.add('hidden');
   document.getElementById('appRoot').classList.add('hidden');
+  const np=document.getElementById('newpassWrap'); if(np) np.classList.add('hidden');
   document.getElementById('waitingWrap').classList.remove('hidden');
   const first=((currentProfile&&currentProfile.name)||'').split(' ')[0]||'';
   document.getElementById('waitHi').textContent = first ? ('Olá, '+first+'!') : 'Conta criada!';
