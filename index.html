@@ -308,6 +308,30 @@ const statusOf=id=>STATUS.find(s=>s.id===id)||STATUS[0];
 
 let sb=null, currentUser=null, currentProfile=null;
 let DB={people:[],projects:[],tasks:[],posts:[]};
+let confirmMsg=null, authErrMsg=null;
+
+// Detecta se a página foi aberta a partir de um link de confirmação de e-mail
+function detectAuthRedirect(){
+  try{
+    const h = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+    const hp = new URLSearchParams(h);
+    const qp = new URLSearchParams(window.location.search);
+    const type = hp.get('type') || qp.get('type');
+    authErrMsg = hp.get('error_description') || qp.get('error_description');
+    if(type==='signup' || type==='magiclink' || type==='email_change' || (qp.get('code') && !type)){
+      confirmMsg = 'Seu e-mail foi confirmado com sucesso! 🎉';
+    }
+  }catch(e){}
+}
+
+// Aviso flutuante (toast)
+function showToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--good);color:#fff;padding:12px 22px;border-radius:10px;font-weight:650;font-size:14px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.22)';
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},4200);
+}
 
 /* ---------- Boot / Auth ---------- */
 function configOk(){
@@ -323,6 +347,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     return;
   }
   sb=window.supabase.createClient(window.NUCLEO_CONFIG.SUPABASE_URL, window.NUCLEO_CONFIG.SUPABASE_ANON_KEY);
+  detectAuthRedirect();
   sb.auth.onAuthStateChange((_e,session)=>{
     if(session && session.user){ if(!currentUser){ currentUser=session.user.id; boot(); } }
     else { currentUser=null; showAuth(); }
@@ -336,6 +361,8 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 function showAuth(){
   document.getElementById('appRoot').classList.add('hidden');
   document.getElementById('authWrap').classList.remove('hidden');
+  if(authErrMsg){ authMsg('Não foi possível confirmar automaticamente: '+authErrMsg+'. Tente fazer login normalmente.','err'); authErrMsg=null; }
+  else if(confirmMsg){ authMsg(confirmMsg+' Faça login para entrar.','ok'); confirmMsg=null; }
 }
 let authMode='login';
 function authTab(m){
@@ -389,6 +416,7 @@ async function boot(){
   await loadAll();
   subscribeRealtime();
   renderAll();
+  if(confirmMsg){ showToast(confirmMsg); confirmMsg=null; }
 }
 async function ensureProfile(){
   let {data}=await sb.from('profiles').select('*').eq('id',currentUser).maybeSingle();
