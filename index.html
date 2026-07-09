@@ -853,6 +853,7 @@ function viewEquipe(){
         <span class="tag" style="background:${lv.bg};color:${lv.color};margin-top:9px">${lv.label}</span>
         ${levelControl(p)}
         <div class="mstats"><div><b>${open}</b><span>Abertas</span></div><div><b>${done}</b><span>Feitas</span></div><div><b>${ts.length}</b><span>Total</span></div></div>
+        ${canDeleteUser(p)?`<button class="btn ghost" style="margin-top:10px;color:var(--critical);font-size:12px;padding:6px 10px" onclick="delUser('${p.id}')">🗑 Excluir cadastro</button>`:''}
       </div>`;
     }).join('')}
     <div class="member" style="cursor:pointer;border-style:dashed;justify-content:center;color:var(--muted)" onclick="openInviteInfo()"><div style="font-size:30px">＋</div><div class="mn" style="color:var(--text-2)">Convidar pessoa</div><div class="mr">como adicionar</div></div>
@@ -872,6 +873,21 @@ function levelControl(p){
 async function setUserLevel(id,level){
   const {error}=await sb.from('profiles').update({level}).eq('id',id);
   if(error){ showToast('⚠️ Não foi possível alterar: '+(error.message||'sem permissão')); }
+  await reload();
+}
+// Exclusão de cadastro (espelha o RLS/hierarquia): admin exclui qualquer um; gerente só membro/novo; nunca a si mesmo
+function canDeleteUser(p){
+  if(!p || p.id===currentUser) return false;
+  if(isAdmin()) return true;
+  if(myLevel==='gerente' && (p.level==='membro'||p.level==='novo')) return true;
+  return false;
+}
+async function delUser(id){
+  const p=person(id); const nome=(p&&p.name)||'esta pessoa';
+  if(!confirm('Excluir DEFINITIVAMENTE o cadastro de '+nome+'?\n\nEsta ação não pode ser desfeita. O login será apagado e as tarefas e publicações dessa pessoa ficarão sem responsável.')) return;
+  const {error}=await sb.rpc('delete_user',{target:id});
+  if(error){ showToast('⚠️ '+(error.message||'Não foi possível excluir o cadastro.')); return; }
+  showToast('Cadastro excluído com sucesso.');
   await reload();
 }
 function openInviteInfo(){
