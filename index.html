@@ -828,7 +828,7 @@ function viewMural(){
     ${DB.posts.slice().sort((a,b)=>b.ts-a.ts).map(m=>{
       const liked=m.likes.includes(currentUser);
       return `<div class="card post" style="margin-top:14px">
-        <div class="post-head">${avatar(m.author)}<div><div class="pn">${esc(person(m.author).name)}</div><div class="pw">${esc(person(m.author).role)} · ${relTime(m.ts)} atrás</div></div></div>
+        <div class="post-head">${avatar(m.author)}<div><div class="pn">${esc(person(m.author).name)}</div><div class="pw">${esc(person(m.author).role)} · ${relTime(m.ts)} atrás</div></div>${canDeletePost(m)?`<button class="icon-btn" title="Excluir mensagem" onclick="delPost('${m.id}')" style="margin-left:auto;color:var(--critical)">🗑</button>`:''}</div>
         <div class="post-body">${esc(m.text)}</div>
         <div class="post-actions"><button class="pact ${liked?'liked':''}" onclick="toggleLike('${m.id}')">${liked?'♥':'♡'} ${m.likes.length||''} Curtir</button><button class="pact" onclick="document.getElementById('ci_${m.id}').focus()">💬 ${m.comments.length||''} Comentar</button></div>
         ${m.comments.length?`<div class="comments">${m.comments.map(c=>`<div class="comment">${avatar(c.author,'sm')}<div class="cb"><div class="cn">${esc(person(c.author).name)}</div><div class="ct">${esc(c.text)}</div></div></div>`).join('')}</div>`:''}
@@ -840,6 +840,20 @@ function viewMural(){
 async function publishPost(){const t=$('#muralText').value.trim();if(!t)return;await sb.from('posts').insert({author_id:currentUser,text:t});await reload();}
 async function toggleLike(id){const m=DB.posts.find(p=>p.id===id);if(m.likes.includes(currentUser)){await sb.from('likes').delete().eq('post_id',id).eq('user_id',currentUser);}else{await sb.from('likes').insert({post_id:id,user_id:currentUser});}await reload();}
 async function addComment(id,v){v=v.trim();if(!v)return;await sb.from('comments').insert({post_id:id,author_id:currentUser,text:v});await reload();}
+function canDeletePost(m){
+  if(!m) return false;
+  if(m.author===currentUser) return true;              // própria mensagem
+  if(isAdmin()) return true;                            // administrador: qualquer uma
+  if(myLevel==='gerente' && person(m.author).level!=='admin') return true; // gerente: todas menos as do admin
+  return false;
+}
+async function delPost(id){
+  if(!confirm('Excluir esta mensagem do mural?\n\nEsta ação não pode ser desfeita. Os comentários e curtidas dela também serão removidos.')) return;
+  const {error}=await sb.from('posts').delete().eq('id',id);
+  if(error){ showToast('⚠️ '+(error.message||'Não foi possível excluir a mensagem.')); return; }
+  showToast('Mensagem excluída.');
+  await reload();
+}
 
 /* ---------- EQUIPE ---------- */
 function viewEquipe(){
