@@ -288,6 +288,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
       <div class="auth-field signup-only hidden"><label>Cargo / função</label><input id="auRole" placeholder="Ex: Sócio-diretor"></div>
       <div class="auth-field"><label>E-mail</label><input id="auEmail" type="email" placeholder="voce@empresa.com" autocomplete="email"></div>
       <div class="auth-field" id="auPassField"><label>Senha</label><div class="pass-wrap"><input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pass-eye" onclick="togglePass('auPass',this)" title="Mostrar/ocultar senha">👁</button></div></div>
+      <div id="captchaBox" style="display:flex;justify-content:center;margin:2px 0 14px"><div class="h-captcha" data-sitekey="df368992-ae7c-4566-b49e-32f40bbaaf90"></div></div>
       <button class="btn block" id="authSubmit" onclick="authSubmit()">Entrar</button>
       <div class="auth-links">
         <a id="forgotLink" onclick="authTab('recover')">Esqueci minha senha</a>
@@ -355,6 +356,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 <script>window.NUCLEO_CONFIG={SUPABASE_URL:"https://nmuubpywxglopxoznamo.supabase.co",SUPABASE_ANON_KEY:"sb_publishable_0CnytQCXAc-dS8P_b2q7Sg_4AiHuooC"};</script>
 <script>
 /* ============================================================
@@ -484,39 +486,43 @@ function togglePass(id,btn){
   btn.textContent = show ? '🙈' : '👁';
   btn.classList.toggle('on',show);
 }
+function getCaptcha(){ try{ return (window.hcaptcha && typeof hcaptcha.getResponse==='function') ? (hcaptcha.getResponse()||'') : ''; }catch(e){ return ''; } }
+function resetCaptcha(){ try{ if(window.hcaptcha && typeof hcaptcha.reset==='function') hcaptcha.reset(); }catch(e){} }
 async function authSubmit(){
   const email=document.getElementById('auEmail').value.trim();
   const pass=document.getElementById('auPass').value;
   const btn=document.getElementById('authSubmit');
+  const captchaToken=getCaptcha();
+  if(!captchaToken){ authMsg('Confirme o captcha "Não sou um robô" antes de continuar.','err'); return; }
   if(authMode==='recover'){
     if(!email){authMsg('Informe seu e-mail.','err');return;}
     btn.disabled=true;
     try{
       const redirectTo=location.origin+location.pathname+'?type=recovery';
-      const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+      const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo,captchaToken});
       if(error) authMsg(traduz(error.message),'err');
       else authMsg('Se este e-mail tiver uma conta, enviamos um link para redefinir a senha. Verifique sua caixa de entrada (e o spam).','ok');
     }catch(e){authMsg('Erro de conexão. Tente novamente.','err');}
-    btn.disabled=false; return;
+    resetCaptcha(); btn.disabled=false; return;
   }
   if(!email||!pass){authMsg('Preencha e-mail e senha.','err');return;}
   btn.disabled=true;
   try{
     if(authMode==='login'){
-      const {error}=await sb.auth.signInWithPassword({email,password:pass});
+      const {error}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken}});
       if(error) authMsg(traduz(error.message),'err');
     } else {
       const name=document.getElementById('auName').value.trim();
       const role=document.getElementById('auRole').value.trim()||'Colaborador';
       if(!name){authMsg('Informe seu nome.','err');btn.disabled=false;return;}
       if(pass.length<8){authMsg('A senha precisa de ao menos 8 caracteres.','err');btn.disabled=false;return;}
-      const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name,role}}});
+      const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name,role},captchaToken}});
       if(error){authMsg(traduz(error.message),'err');}
       else if(data.session){ /* login automático via onAuthStateChange */ }
       else { authMsg('Conta criada! Verifique seu e-mail para confirmar o acesso e depois faça login.','ok'); authTab('login'); }
     }
   }catch(e){authMsg('Erro de conexão. Confira o config.js.','err');}
-  btn.disabled=false;
+  resetCaptcha(); btn.disabled=false;
 }
 function traduz(m){
   m=(m||'').toLowerCase();
