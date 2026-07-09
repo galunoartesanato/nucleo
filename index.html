@@ -248,6 +248,11 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .auth-field label{display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text-2)}
 .auth-field input{width:100%;border:1px solid var(--border);border-radius:var(--radius-s);padding:11px 13px;background:var(--surface-2);color:var(--text-1);outline:none}
 .auth-field input:focus{border-color:var(--brand)}
+.pass-wrap{position:relative}
+.pass-wrap input{width:100%;padding-right:42px}
+.pass-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:17px;line-height:1;padding:2px;opacity:.5}
+.pass-eye:hover{opacity:.85}
+.pass-eye.on{opacity:.95}
 .auth-msg{font-size:12.5px;padding:10px 12px;border-radius:8px;margin-bottom:13px;display:none}
 .auth-msg.err{display:block;background:var(--crit-wash);color:var(--critical)}
 .auth-msg.ok{display:block;background:var(--good-wash);color:var(--good)}
@@ -282,7 +287,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
       <div class="auth-field signup-only hidden"><label>Nome completo</label><input id="auName" placeholder="Ex: Gabriel Noris"></div>
       <div class="auth-field signup-only hidden"><label>Cargo / função</label><input id="auRole" placeholder="Ex: Sócio-diretor"></div>
       <div class="auth-field"><label>E-mail</label><input id="auEmail" type="email" placeholder="voce@empresa.com" autocomplete="email"></div>
-      <div class="auth-field" id="auPassField"><label>Senha</label><input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="auth-field" id="auPassField"><label>Senha</label><div class="pass-wrap"><input id="auPass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pass-eye" onclick="togglePass('auPass',this)" title="Mostrar/ocultar senha">👁</button></div></div>
       <button class="btn block" id="authSubmit" onclick="authSubmit()">Entrar</button>
       <div class="auth-links">
         <a id="forgotLink" onclick="authTab('recover')">Esqueci minha senha</a>
@@ -309,8 +314,8 @@ input,textarea,select{font-family:inherit;font-size:14px}
     <div class="auth-brand"><div class="logo">NG</div><div class="nm">Núcleo Galuno</div></div>
     <div class="auth-sub">Defina uma nova senha</div>
     <div class="auth-msg" id="npMsg"></div>
-    <div class="auth-field"><label>Nova senha</label><input id="npPass" type="password" placeholder="••••••••" autocomplete="new-password"></div>
-    <div class="auth-field"><label>Confirmar nova senha</label><input id="npPass2" type="password" placeholder="••••••••" autocomplete="new-password"></div>
+    <div class="auth-field"><label>Nova senha</label><div class="pass-wrap"><input id="npPass" type="password" placeholder="••••••••" autocomplete="new-password"><button type="button" class="pass-eye" onclick="togglePass('npPass',this)" title="Mostrar/ocultar senha">👁</button></div></div>
+    <div class="auth-field"><label>Confirmar nova senha</label><div class="pass-wrap"><input id="npPass2" type="password" placeholder="••••••••" autocomplete="new-password"><button type="button" class="pass-eye" onclick="togglePass('npPass2',this)" title="Mostrar/ocultar senha">👁</button></div></div>
     <button class="btn block" id="npSubmit" onclick="saveNewPassword()">Salvar nova senha</button>
   </div>
 </div>
@@ -472,6 +477,13 @@ function authTab(m){
 }
 function authMsg(t,type){const el=document.getElementById('authMsg');el.textContent=t;el.className='auth-msg '+type;}
 function hideAuthMsg(){document.getElementById('authMsg').className='auth-msg';}
+function togglePass(id,btn){
+  const i=document.getElementById(id); if(!i)return;
+  const show = i.type==='password';
+  i.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁';
+  btn.classList.toggle('on',show);
+}
 async function authSubmit(){
   const email=document.getElementById('auEmail').value.trim();
   const pass=document.getElementById('auPass').value;
