@@ -619,6 +619,14 @@ function subscribeRealtime(){
 /* ---------- Helpers ---------- */
 const $=s=>document.querySelector(s);
 const person=id=>DB.people.find(p=>p.id===id)||{name:'—',role:''};
+// Nome curto que diferencia homônimos: só o 1º nome se for único; senão 1º + último
+function shortName(id){
+  const p=person(id); const full=(p.name||'—').trim(); const parts=full.split(/\s+/);
+  const first=parts[0]||full;
+  const sameFirst=DB.people.filter(x=>((x.name||'').trim().split(/\s+/)[0]||'')===first);
+  if(sameFirst.length<=1) return first;
+  return parts.length>1 ? first+' '+parts[parts.length-1] : full;
+}
 const project=id=>DB.projects.find(p=>p.id===id);
 const avIndex=id=>Math.max(0,DB.people.findIndex(p=>p.id===id));
 function initials(name){return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();}
@@ -738,9 +746,9 @@ function viewTarefas(){
     ${tasks.length?`<table class="ttable"><thead><tr><th style="width:34px"></th><th>Tarefa</th><th>Projeto</th><th>Responsável</th><th>Prioridade</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>
     ${tasks.map(t=>{const s=statusOf(t.status);const p=project(t.proj);const ed=canEditTask(t);const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<tr>
       <td><div class="chk ${t.status==='done'?'done':''}" ${ed?`onclick="toggleDone('${t.id}')"`:'style="opacity:.45;cursor:default"'}>${t.status==='done'?'✓':''}</div></td>
-      <td class="title-cell">${esc(t.title)}${subN?` <span class="subprog">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}${subN?`<div class="subbar"><i style="width:${Math.round(subD/subN*100)}%"></i></div><div class="subrows">${t.subtasks.map(st=>{const cc=canEditTask(t)||st.assignee===currentUser||st.createdBy===currentUser;return `<div class="subrow ${st.done?'done':''}"><span class="minichk ${st.done?'on':''}" ${cc?`onclick="toggleSubtask('${st.id}','${t.id}')"`:'style="cursor:default;opacity:.5"'}>${st.done?'✓':''}</span><span class="sname">${esc(st.title)}</span>${st.assignee?`<span class="sasg">${esc(person(st.assignee).name.split(' ')[0])}</span>`:''}</div>`;}).join('')}</div>`:''}</td>
+      <td class="title-cell">${esc(t.title)}${subN?` <span class="subprog">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}${subN?`<div class="subbar"><i style="width:${Math.round(subD/subN*100)}%"></i></div><div class="subrows">${t.subtasks.map(st=>{const cc=canEditTask(t)||st.assignee===currentUser||st.createdBy===currentUser;return `<div class="subrow ${st.done?'done':''}"><span class="minichk ${st.done?'on':''}" ${cc?`onclick="toggleSubtask('${st.id}','${t.id}')"`:'style="cursor:default;opacity:.5"'}>${st.done?'✓':''}</span><span class="sname">${esc(st.title)}</span>${st.assignee?`<span class="sasg">${esc(shortName(st.assignee))}</span>`:''}</div>`;}).join('')}</div>`:''}</td>
       <td>${p?`<span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:'—'}</td>
-      <td><div style="display:flex;align-items:center;gap:5px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(person(t.owner).name.split(' ')[0])}</span>${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,3).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></td>
+      <td><div style="display:flex;align-items:center;gap:5px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(shortName(t.owner))}</span>${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,3).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></td>
       <td><span class="prio ${t.prio}">${t.prio}</span></td>
       <td><span style="font-size:12.5px;color:${t.due&&daysUntil(t.due)<0&&t.status!=='done'?'var(--critical)':'var(--text-2)'};font-weight:600">${t.due?dueLabel(t.due):'—'}</span></td>
       <td>${ed?`<select onchange="setStatus('${t.id}',this.value)" style="border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--surface-2);color:${s.color};font-weight:700;font-size:12px;outline:none">${STATUS.map(o=>`<option value="${o.id}" ${o.id===t.status?'selected':''}>${o.label}</option>`).join('')}</select>`:`<span class="readonly-badge" style="background:var(--surface-3);color:${s.color};font-size:12px"><span class="dot" style="background:${s.raw}"></span> ${s.label}</span>`}</td>
@@ -909,7 +917,7 @@ function liderChipsHtml(leaderId){
   const ppl=DB.people.filter(p=>p.level!=='novo' && p.id!==leaderId);
   if(!ppl.length) return '<div class="note-sm">Sem outras pessoas com acesso para adicionar.</div>';
   const sel=window._liderados||[];
-  return ppl.map(p=>`<span class="chip-pick ${sel.includes(p.id)?'on':''}" onclick="toggleLider('${p.id}')">${esc(p.name.split(' ')[0])}</span>`).join('');
+  return ppl.map(p=>`<span class="chip-pick ${sel.includes(p.id)?'on':''}" onclick="toggleLider('${p.id}')">${esc(shortName(p.id))}</span>`).join('');
 }
 function toggleLider(id){
   const a=window._liderados||(window._liderados=[]);
@@ -923,7 +931,7 @@ function onLeaderChange(v){
 }
 function subAssigneeOptions(){
   const ppl=DB.people.filter(p=>p.level!=='novo');
-  return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}">${esc(p.name.split(' ')[0])}</option>`).join('');
+  return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
 }
 function subListHtml(taskId){
   const t=DB.tasks.find(x=>x.id===taskId); if(!t) return '';
@@ -934,7 +942,7 @@ function subListHtml(taskId){
     return `<div class="sub ${s.done?'checked':''}">
       <div class="chk ${s.done?'done':''}" ${canCheck?`onclick="toggleSubtask('${s.id}','${taskId}')"`:'style="opacity:.45;cursor:default"'}>${s.done?'✓':''}</div>
       <div class="stitle">${esc(s.title)}</div>
-      ${s.assignee?`<span class="sassign">${esc(person(s.assignee).name.split(' ')[0])}</span>`:''}
+      ${s.assignee?`<span class="sassign">${esc(shortName(s.assignee))}</span>`:''}
       ${canRemove?`<button class="sx" onclick="delSubtask('${s.id}','${taskId}')" title="Excluir">✕</button>`:''}
     </div>`;
   }).join('');
@@ -974,7 +982,7 @@ function viewTaskModalHtml(t){
         <div class="field"><label>Projeto</label><div style="font-size:13px">${p?esc(p.name):'—'}</div></div>
         <div class="field"><label>Líder (responsável)</label><div style="display:flex;align-items:center;gap:7px">${avatar(t.owner,'sm')}<span style="font-size:13px">${esc(person(t.owner).name)}</span></div></div>
       </div>
-      ${lids.length?`<div class="field"><label>Liderados</label><div class="chips">${lids.map(id=>`<span class="chip-pick on" style="cursor:default">${esc(person(id).name.split(' ')[0])}</span>`).join('')}</div></div>`:''}
+      ${lids.length?`<div class="field"><label>Liderados</label><div class="chips">${lids.map(id=>`<span class="chip-pick on" style="cursor:default">${esc(shortName(id))}</span>`).join('')}</div></div>`:''}
       <div class="field-row">
         <div class="field"><label>Prioridade</label><div><span class="prio ${t.prio}">${t.prio}</span></div></div>
         <div class="field"><label>Status</label><div><span class="readonly-badge" style="background:var(--surface-3);color:${s.color}"><span class="dot" style="background:${s.raw}"></span> ${s.label}</span></div></div>
