@@ -218,6 +218,17 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .sub-add input{flex:1}
 .readonly-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:12px}
 .note-sm{font-size:12px;color:var(--muted);background:var(--surface-3);padding:9px 12px;border-radius:8px}
+/* subtarefas visíveis na tabela de tarefas */
+.subprog{font-size:11px;color:var(--muted);font-weight:700}
+.subbar{height:4px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:5px;max-width:180px}
+.subbar>i{display:block;height:100%;background:var(--good);transition:width .2s}
+.subrows{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.subrow{display:flex;align-items:center;gap:7px;font-size:12px}
+.minichk{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border);display:inline-grid;place-items:center;font-size:10px;color:#fff;cursor:pointer;flex-shrink:0;line-height:1;background:var(--surface-1)}
+.minichk.on{background:var(--good);border-color:var(--good)}
+.subrow .sname{color:var(--text-2);font-weight:500}
+.subrow.done .sname{text-decoration:line-through;color:var(--muted)}
+.subrow .sasg{font-size:10.5px;color:var(--muted);background:var(--surface-3);padding:1px 7px;border-radius:10px}
 .modal-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
 .empty{text-align:center;padding:50px 20px;color:var(--muted)}
 .empty .ei{font-size:40px;opacity:.4}
@@ -727,7 +738,7 @@ function viewTarefas(){
     ${tasks.length?`<table class="ttable"><thead><tr><th style="width:34px"></th><th>Tarefa</th><th>Projeto</th><th>Responsável</th><th>Prioridade</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>
     ${tasks.map(t=>{const s=statusOf(t.status);const p=project(t.proj);const ed=canEditTask(t);const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<tr>
       <td><div class="chk ${t.status==='done'?'done':''}" ${ed?`onclick="toggleDone('${t.id}')"`:'style="opacity:.45;cursor:default"'}>${t.status==='done'?'✓':''}</div></td>
-      <td class="title-cell">${esc(t.title)}${subN?` <span style="font-size:11px;color:var(--muted);font-weight:600">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}</td>
+      <td class="title-cell">${esc(t.title)}${subN?` <span class="subprog">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}${subN?`<div class="subbar"><i style="width:${Math.round(subD/subN*100)}%"></i></div><div class="subrows">${t.subtasks.map(st=>{const cc=canEditTask(t)||st.assignee===currentUser||st.createdBy===currentUser;return `<div class="subrow ${st.done?'done':''}"><span class="minichk ${st.done?'on':''}" ${cc?`onclick="toggleSubtask('${st.id}','${t.id}')"`:'style="cursor:default;opacity:.5"'}>${st.done?'✓':''}</span><span class="sname">${esc(st.title)}</span>${st.assignee?`<span class="sasg">${esc(person(st.assignee).name.split(' ')[0])}</span>`:''}</div>`;}).join('')}</div>`:''}</td>
       <td>${p?`<span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:'—'}</td>
       <td><div style="display:flex;align-items:center;gap:5px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(person(t.owner).name.split(' ')[0])}</span>${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,3).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></td>
       <td><span class="prio ${t.prio}">${t.prio}</span></td>
