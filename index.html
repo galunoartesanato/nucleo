@@ -509,7 +509,7 @@ async function authSubmit(){
       const name=document.getElementById('auName').value.trim();
       const role=document.getElementById('auRole').value.trim()||'Colaborador';
       if(!name){authMsg('Informe seu nome.','err');btn.disabled=false;return;}
-      if(pass.length<6){authMsg('A senha precisa de ao menos 6 caracteres.','err');btn.disabled=false;return;}
+      if(pass.length<8){authMsg('A senha precisa de ao menos 8 caracteres.','err');btn.disabled=false;return;}
       const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name,role}}});
       if(error){authMsg(traduz(error.message),'err');}
       else if(data.session){ /* login automático via onAuthStateChange */ }
@@ -523,7 +523,7 @@ function traduz(m){
   if(m.includes('invalid login')) return 'E-mail ou senha incorretos.';
   if(m.includes('already registered')) return 'Este e-mail já tem conta. Faça login.';
   if(m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada).';
-  if(m.includes('password')) return 'Senha inválida (mínimo 6 caracteres).';
+  if(m.includes('password')) return 'Senha inválida (mínimo 8 caracteres).';
   return m;
 }
 async function doLogout(){ await sb.auth.signOut(); currentUser=null; location.reload(); }
@@ -539,7 +539,7 @@ async function saveNewPassword(){
   const p1=document.getElementById('npPass').value;
   const p2=document.getElementById('npPass2').value;
   const btn=document.getElementById('npSubmit');
-  if(!p1||p1.length<6){npMsg('A senha precisa de ao menos 6 caracteres.','err');return;}
+  if(!p1||p1.length<8){npMsg('A senha precisa de ao menos 8 caracteres.','err');return;}
   if(p1!==p2){npMsg('As senhas não coincidem.','err');return;}
   btn.disabled=true;
   try{
