@@ -1002,7 +1002,7 @@ function editTaskModalHtml(t){
     <div class="modal-body">
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
       <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div><div class="field"><label>Anexos (links)</label><textarea id="f_links" rows="2" style="resize:none;overflow:hidden;min-height:40px" oninput="autoGrow(this)" placeholder="Cole links aqui, um por linha">${t&&t.links?t.links.join('
-'):''}</textarea>${t&&t.links&&t.links.length?`<div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div>`:''}</div>
+)):''}</textarea>${t&&t.links&&t.links.length?`<div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div>`:''}</div>
       <div class="field-row">
         <div class="field"><label>Projeto</label><select id="f_proj" ${(!t&&window._lockProj)?'disabled':''}>${DB.projects.map(p=>`<option value="${p.id}" ${((t&&t.proj===p.id)||(!t&&window._lockProj===p.id))?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
@@ -1045,8 +1045,8 @@ function viewTaskModalHtml(t){
 async function saveTask(id){
   const g=x=>{const e=$('#f_'+x);return e?e.value:'';};
   const title=g('title').trim();if(!title){const e=$('#f_title');if(e)e.style.borderColor='var(--critical)';return;}
-  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:(g('links')||'').split('
-').map(s=>s.trim()).filter(Boolean)};
+  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:(g('links')||'').split(String.fromCharCode(10
+)).map(s=>s.trim()).filter(Boolean)};
   const btn=$('#saveTaskBtn');if(btn)btn.disabled=true;
   let taskId=id;
   if(id){ const {error}=await sb.from('tasks').update(row).eq('id',id); if(error){showToast('⚠️ Sem permissão para editar esta tarefa.');if(btn)btn.disabled=false;return;} }
