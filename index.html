@@ -210,9 +210,9 @@ input,textarea,select{font-family:inherit;font-size:14px}
 /* checklist de subtarefas */
 .subs{display:flex;flex-direction:column;gap:7px}
 .sub{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
-.sub .stitle{flex:1;font-size:13px}
+.sub .stitle{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
 .sub.checked .stitle{text-decoration:line-through;color:var(--muted)}
-.sub .sassign{font-size:11px;color:var(--muted);white-space:nowrap}
+.sub .sassign{position:relative;flex:0 0 120px;width:120px;max-width:120px;border:1px solid var(--border);border-radius:6px;padding:2px 6px} .saname{font-size:11px;color:var(--muted);display:block;line-height:1.2;overflow-wrap:anywhere} .saedit{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;font-size:11px}
 .sub .sx{cursor:pointer;color:var(--muted);font-size:14px;border:none;background:none}
 .sub-add{display:flex;gap:8px;margin-top:9px}
 .sub-add input{flex:1}
@@ -990,7 +990,7 @@ function subListHtml(taskId){
     return `<div class="sub ${s.done?'checked':''}">
       <div class="chk ${s.done?'done':''}" ${canCheck?`onclick="toggleSubtask('${s.id}','${taskId}')"`:'style="opacity:.45;cursor:default"'}>${s.done?'✓':''}</div>
       <div class="stitle">${esc(s.title)}</div>
-      <select class="sassign" ${(canEditTask(t)||s.createdBy===currentUser)?'':'disabled'} onchange="updateSubAssignee('${s.id}','${taskId}',this.value)">${subAssigneeOptions(s.assignee||'')}</select>
+      <div class="sassign"><span class="saname">${s.assignee?esc(shortName(s.assignee)):'—'}</span>${(canEditTask(t)||s.createdBy===currentUser)?`<select class="saedit" onchange="updateSubAssignee('${s.id}','${taskId}',this.value)">${subAssigneeOptions(s.assignee||'')}</select>`:''}</div>
       ${canRemove?`<button class="sx" onclick="delSubtask('${s.id}','${taskId}')" title="Excluir">✕</button>`:''}
     </div>`;
   }).join('');
