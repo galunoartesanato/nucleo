@@ -192,7 +192,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
 
 .overlay{position:fixed;inset:0;background:rgba(11,11,11,.5);backdrop-filter:blur(2px);display:none;place-items:center;z-index:100;padding:20px}
 .overlay.open{display:grid}
-.modal{background:var(--surface-1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+.modal{background:var(--surface-1);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:100%;max-width:880px;max-height:90vh;overflow-y:auto}
 .modal-head{display:flex;align-items:center;padding:20px 22px;border-bottom:1px solid var(--border)}
 .modal-head h3{font-size:17px;font-weight:750}
 .modal-head .grow{flex:1}
@@ -959,7 +959,7 @@ function openTaskModal(id){
   const editable=canEditTask(t);
   $('#modal').innerHTML = editable ? editTaskModalHtml(t) : viewTaskModalHtml(t);
   $('#overlay').classList.add('open');
-  if(editable) setTimeout(()=>{const f=$('#f_title');if(f)f.focus();},50);
+  if(editable) setTimeout(()=>{const f=$('#f_title');if(f)f.focus();const d=$('#f_desc');if(d)autoGrow(d);},50);
 }
 function liderChipsHtml(leaderId){
   const ppl=DB.people.filter(p=>p.level!=='novo' && p.id!==leaderId);
@@ -977,7 +977,7 @@ function onLeaderChange(v){
   window._liderados=(window._liderados||[]).filter(u=>u!==v);
   const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
 }
-function subAssigneeOptions(){
+function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} function subAssigneeOptions(){
   const ppl=DB.people.filter(p=>p.level!=='novo');
   return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
 }
@@ -1001,15 +1001,15 @@ function editTaskModalHtml(t){
     <div class="modal-head"><h3>${t?'Editar tarefa':'Nova tarefa'}</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
-      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div>
+      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div>
       <div class="field-row">
         <div class="field"><label>Projeto</label><select id="f_proj">${DB.projects.map(p=>`<option value="${p.id}" ${t&&t.proj===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
       </div>
       <div class="field"><label>Liderados (outros responsáveis)</label><div class="chips" id="liderChips">${liderChipsHtml(leader)}</div></div>
       <div class="field-row">
-        <div class="field"><label>Prioridade</label><select id="f_prio"><option value="baixa" ${t&&t.prio==='baixa'?'selected':''}>Baixa</option><option value="media" ${!t||t.prio==='media'?'selected':''}>Média</option><option value="alta" ${t&&t.prio==='alta'?'selected':''}>Alta</option></select></div>
-        <div class="field"><label>Prazo</label><input type="date" id="f_due" value="${t?t.due||'':''}"></div>
+        <div class="field"><label>Prioridade</label><select id="f_prio"><option value="baixa" ${!t||t.prio==='baixa'?'selected':''}>Baixa</option><option value="media" ${t&&t.prio==='media'?'selected':''}>Média</option><option value="alta" ${t&&t.prio==='alta'?'selected':''}>Alta</option></select></div>
+        <div class="field"><label>Prazo</label><input type="date" id="f_due" value="${t?t.due||'':''}" onclick="try{this.showPicker()}catch(e){}"></div>
       </div>
       <div class="field"><label>Status</label><select id="f_status">${STATUS.map(s=>`<option value="${s.id}" ${t&&t.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
       ${t?`<div class="field"><label>Subtarefas (checklist)</label><div class="subs" id="subList">${subListHtml(t.id)}</div>
