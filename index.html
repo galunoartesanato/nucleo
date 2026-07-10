@@ -212,7 +212,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .sub{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
 .sub .stitle{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
 .sub.checked .stitle{text-decoration:line-through;color:var(--muted)}
-.sub .sassign{position:relative;flex:0 0 120px;width:120px;max-width:120px;border:1px solid var(--border);border-radius:6px;padding:2px 6px} .saname{font-size:11px;color:var(--muted);display:block;line-height:1.2;overflow-wrap:anywhere} .saedit{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;font-size:11px}
+.sub .linklist{display:flex;flex-direction:column;gap:4px;margin-top:6px} .linkchip{font-size:12px;color:var(--brand);text-decoration:none;overflow-wrap:anywhere;background:var(--surface-3);padding:4px 8px;border-radius:6px} .linkchip:hover{text-decoration:underline} .sassign{position:relative;flex:0 0 120px;width:120px;max-width:120px;border:1px solid var(--border);border-radius:6px;padding:2px 6px} .saname{font-size:11px;color:var(--muted);display:block;line-height:1.2;overflow-wrap:anywhere} .saedit{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;font-size:11px}
 .sub .sx{cursor:pointer;color:var(--muted);font-size:14px;border:none;background:none}
 .sub-add{display:flex;gap:8px;margin-top:9px}
 .sub-add input{flex:1}
@@ -613,14 +613,14 @@ async function loadAll(){
   DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role,level:r.level||'novo'}));
   DB.projects=(pj.data||[]).map(r=>({id:r.id,name:r.name,color:r.color||'#2a78d6'}));
   const assignees=ta.data||[], subs=st.data||[];
-  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',createdBy:r.created_by,
+  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',createdBy:r.created_by,links:r.links||[],
     liderados:assignees.filter(a=>a.task_id===r.id).map(a=>a.user_id),
     subtasks:subs.filter(s=>s.task_id===r.id).map(s=>({id:s.id,title:s.title,done:!!s.done,assignee:s.assignee_id,createdBy:s.created_by}))}));
   const comments=cm.data||[], likes=lk.data||[];
   DB.posts=(po.data||[]).map(r=>({
     id:r.id,author:r.author_id,text:r.text,ts:new Date(r.created_at).getTime(),
     likes:likes.filter(l=>l.post_id===r.id).map(l=>l.user_id),
-    comments:comments.filter(c=>c.post_id===r.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(c=>({author:c.author_id,text:c.text,ts:new Date(c.created_at).getTime()}))
+    comments:comments.filter(c=>c.post_id===r.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(c=>({id:c.id,author:c.author_id,text:c.text,ts:new Date(c.created_at).getTime()}))
   }));
 }
 async function reload(){ await loadAll(); renderAll(); }
@@ -831,7 +831,7 @@ function viewMural(){
         <div class="post-head">${avatar(m.author)}<div><div class="pn">${esc(person(m.author).name)}</div><div class="pw">${esc(person(m.author).role)} · ${relTime(m.ts)} atrás</div></div>${canDeletePost(m)?`<button class="icon-btn" title="Excluir mensagem" onclick="delPost('${m.id}')" style="margin-left:auto;color:var(--critical)">🗑</button>`:''}</div>
         <div class="post-body">${esc(m.text)}</div>
         <div class="post-actions"><button class="pact ${liked?'liked':''}" onclick="toggleLike('${m.id}')">${liked?'♥':'♡'} ${m.likes.length||''} Curtir</button><button class="pact" onclick="document.getElementById('ci_${m.id}').focus()">💬 ${m.comments.length||''} Comentar</button></div>
-        ${m.comments.length?`<div class="comments">${m.comments.map(c=>`<div class="comment">${avatar(c.author,'sm')}<div class="cb"><div class="cn">${esc(person(c.author).name)}</div><div class="ct">${esc(c.text)}</div></div></div>`).join('')}</div>`:''}
+        ${m.comments.length?`<div class="comments">${m.comments.map(c=>`<div class="comment">${avatar(c.author,'sm')}<div class="cb"><div class="cn">${esc(person(c.author).name)}</div><div class="ct">${esc(c.text)}</div></div>${canDeleteComment(c)?`<button class="icon-btn" title="Excluir comentário" onclick="delComment('${c.id}','${m.id}')" style="margin-left:auto;color:var(--critical);width:24px;height:24px">🗑</button>`:''}</div>`).join('')}</div>`:''}
         <div class="comment-input">${avatar(currentUser,'sm')}<input id="ci_${m.id}" placeholder="Escreva um comentário..." onkeydown="if(event.key==='Enter')addComment('${m.id}',this.value)"></div>
       </div>`;
     }).join('')}
@@ -840,7 +840,7 @@ function viewMural(){
 async function publishPost(){const t=$('#muralText').value.trim();if(!t)return;await sb.from('posts').insert({author_id:currentUser,text:t});await reload();}
 async function toggleLike(id){const m=DB.posts.find(p=>p.id===id);if(m.likes.includes(currentUser)){await sb.from('likes').delete().eq('post_id',id).eq('user_id',currentUser);}else{await sb.from('likes').insert({post_id:id,user_id:currentUser});}await reload();}
 async function addComment(id,v){v=v.trim();if(!v)return;await sb.from('comments').insert({post_id:id,author_id:currentUser,text:v});await reload();}
-function canDeletePost(m){
+function canDeleteComment(c){ if(!c) return false; if(c.author===currentUser) return true; if(isAdmin()) return true; if(myLevel==='gerente' && person(c.author).level!=='admin') return true; return false; } async function delComment(id,postId){ if(!confirm('Excluir este comentário?')) return; const {error}=await sb.from('comments').delete().eq('id',id); if(error){ showToast('⚠️ '+(error.message||'Não foi possível excluir.')); return; } showToast('Comentário excluído.'); await reload(); } function canDeletePost(m){
   if(!m) return false;
   if(m.author===currentUser) return true;              // própria mensagem
   if(isAdmin()) return true;                            // administrador: qualquer uma
@@ -977,7 +977,7 @@ function onLeaderChange(v){
   window._liderados=(window._liderados||[]).filter(u=>u!==v);
   const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
 }
-function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
+function lhref(u){u=(u||'').trim();return /^https?:\/\//i.test(u)?u:'https://'+u;} function linkify(x){return (x||'').replace(/((https?:\/\/|www\.)[^\s<]+)/gi,m=>'<a href="'+(/^https?:/i.test(m)?m:'https://'+m)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+m+'</a>');} function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
   const ppl=DB.people.filter(p=>p.level!=='novo');
   return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
@@ -1001,7 +1001,8 @@ function editTaskModalHtml(t){
     <div class="modal-head"><h3>${t?'Editar tarefa':'Nova tarefa'}</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
-      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div>
+      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div><div class="field"><label>Anexos (links)</label><textarea id="f_links" rows="2" style="resize:none;overflow:hidden;min-height:40px" oninput="autoGrow(this)" placeholder="Cole links aqui, um por linha">${t&&t.links?t.links.join('
+'):''}</textarea>${t&&t.links&&t.links.length?`<div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div>`:''}</div>
       <div class="field-row">
         <div class="field"><label>Projeto</label><select id="f_proj" ${(!t&&window._lockProj)?'disabled':''}>${DB.projects.map(p=>`<option value="${p.id}" ${((t&&t.proj===p.id)||(!t&&window._lockProj===p.id))?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
@@ -1025,7 +1026,7 @@ function viewTaskModalHtml(t){
     <div class="modal-head"><h3>Tarefa</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><div style="font-weight:650;font-size:15px">${esc(t.title)}</div></div>
-      ${t.desc?`<div class="field"><label>Descrição</label><div style="font-size:13px;color:var(--text-2);line-height:1.5">${esc(t.desc)}</div></div>`:''}
+      ${t.desc?`<div class="field"><label>Descrição</label><div style="font-size:13px;color:var(--text-2);line-height:1.5;white-space:pre-wrap">${linkify(esc(t.desc))}</div></div>`:''}${t.links&&t.links.length?`<div class="field"><label>Anexos</label><div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div></div>`:''}
       <div class="field-row">
         <div class="field"><label>Projeto</label><div style="font-size:13px">${p?esc(p.name):'—'}</div></div>
         <div class="field"><label>Líder (responsável)</label><div style="display:flex;align-items:center;gap:7px">${avatar(t.owner,'sm')}<span style="font-size:13px">${esc(person(t.owner).name)}</span></div></div>
@@ -1044,7 +1045,8 @@ function viewTaskModalHtml(t){
 async function saveTask(id){
   const g=x=>{const e=$('#f_'+x);return e?e.value:'';};
   const title=g('title').trim();if(!title){const e=$('#f_title');if(e)e.style.borderColor='var(--critical)';return;}
-  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null};
+  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:(g('links')||'').split('
+').map(s=>s.trim()).filter(Boolean)};
   const btn=$('#saveTaskBtn');if(btn)btn.disabled=true;
   let taskId=id;
   if(id){ const {error}=await sb.from('tasks').update(row).eq('id',id); if(error){showToast('⚠️ Sem permissão para editar esta tarefa.');if(btn)btn.disabled=false;return;} }
