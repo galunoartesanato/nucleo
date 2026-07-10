@@ -627,7 +627,7 @@ async function reload(){ await loadAll(); renderAll(); }
 
 let rtTimer=null;
 function subscribeRealtime(){
-  sb.channel('nucleo-rt').on('postgres_changes',{event:'*',schema:'public'},()=>{
+  try{if(window._rtChan){sb.removeChannel(window._rtChan);window._rtChan=null;}}catch(e){} window._rtChan=sb.channel('nucleo-rt'); window._rtChan.on('postgres_changes',{event:'*',schema:'public'},()=>{
     if(document.getElementById('overlay').classList.contains('open')) return; // não interrompe edição
     clearTimeout(rtTimer);
     rtTimer=setTimeout(async ()=>{ await loadAll(); renderView(); renderNav(); }, 400);
