@@ -692,7 +692,7 @@ function renderView(){
   const t=TITLES[route];
   $('#pageTitle').textContent=(route==='projetos'&&currentProject)?project(currentProject).name:t[0];
   $('#pageSub').textContent=(route==='projetos'&&currentProject)?'Quadro Kanban':t[1];
-  $('#primaryLabel').textContent=PRIMARY[route];
+  $('#primaryLabel').textContent=(route==='projetos'&&currentProject)?'Nova tarefa':PRIMARY[route];
   const v=$('#view');
   if(route==='painel')v.innerHTML=viewPainel();
   else if(route==='tarefas')v.innerHTML=viewTarefas();
@@ -953,7 +953,7 @@ async function delProject(id){
 /* ---------- Modais ---------- */
 function closeModal(){$('#overlay').classList.remove('open');}
 function openTaskModal(id){
-  const t=id?DB.tasks.find(x=>x.id===id):null;
+  const t=id?DB.tasks.find(x=>x.id===id):null; window._lockProj=(!id&&typeof currentProject!=='undefined'&&currentProject)?currentProject:null;
   if(!DB.projects.length){alert('Crie um projeto antes de adicionar tarefas.');return;}
   window._liderados = t?(t.liderados||[]).slice():[];
   const editable=canEditTask(t);
@@ -977,9 +977,9 @@ function onLeaderChange(v){
   window._liderados=(window._liderados||[]).filter(u=>u!==v);
   const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
 }
-function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} function subAssigneeOptions(){
+function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
   const ppl=DB.people.filter(p=>p.level!=='novo');
-  return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
 function subListHtml(taskId){
   const t=DB.tasks.find(x=>x.id===taskId); if(!t) return '';
@@ -990,7 +990,7 @@ function subListHtml(taskId){
     return `<div class="sub ${s.done?'checked':''}">
       <div class="chk ${s.done?'done':''}" ${canCheck?`onclick="toggleSubtask('${s.id}','${taskId}')"`:'style="opacity:.45;cursor:default"'}>${s.done?'✓':''}</div>
       <div class="stitle">${esc(s.title)}</div>
-      ${s.assignee?`<span class="sassign">${esc(shortName(s.assignee))}</span>`:''}
+      <select class="sassign" ${(canEditTask(t)||s.createdBy===currentUser)?'':'disabled'} onchange="updateSubAssignee('${s.id}','${taskId}',this.value)">${subAssigneeOptions(s.assignee||'')}</select>
       ${canRemove?`<button class="sx" onclick="delSubtask('${s.id}','${taskId}')" title="Excluir">✕</button>`:''}
     </div>`;
   }).join('');
@@ -1003,7 +1003,7 @@ function editTaskModalHtml(t){
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
       <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div>
       <div class="field-row">
-        <div class="field"><label>Projeto</label><select id="f_proj">${DB.projects.map(p=>`<option value="${p.id}" ${t&&t.proj===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Projeto</label><select id="f_proj" ${(!t&&window._lockProj)?'disabled':''}>${DB.projects.map(p=>`<option value="${p.id}" ${((t&&t.proj===p.id)||(!t&&window._lockProj===p.id))?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
       </div>
       <div class="field"><label>Liderados (outros responsáveis)</label><div class="chips" id="liderChips">${liderChipsHtml(leader)}</div></div>
