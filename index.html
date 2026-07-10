@@ -212,7 +212,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .sub{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
 .sub .stitle{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere}
 .sub.checked .stitle{text-decoration:line-through;color:var(--muted)}
-.sub .linklist{display:flex;flex-direction:column;gap:4px;margin-top:6px} .linkchip{font-size:12px;color:var(--brand);text-decoration:none;overflow-wrap:anywhere;background:var(--surface-3);padding:4px 8px;border-radius:6px} .linkchip:hover{text-decoration:underline} .sassign{position:relative;flex:0 0 120px;width:120px;max-width:120px;border:1px solid var(--border);border-radius:6px;padding:2px 6px} .saname{font-size:11px;color:var(--muted);display:block;line-height:1.2;overflow-wrap:anywhere} .saedit{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;font-size:11px}
+.sub .linklist{display:flex;flex-direction:column;gap:4px;margin-top:6px} .linkchip{font-size:12px;color:var(--brand);text-decoration:none;overflow-wrap:anywhere;background:var(--surface-3);padding:4px 8px;border-radius:6px} .linkchip:hover{text-decoration:underline}.linklist{display:flex;flex-direction:column;gap:6px;margin-top:8px}.linkadd{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.linkadd input{flex:1;min-width:130px}.linkadd input#f_linkDesc{flex:0 0 32%}.linkrow{display:flex;align-items:center;gap:6px}.linkrow .linkchip{flex:1;min-width:0}.linkdel{flex:0 0 auto;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;width:26px;height:26px;line-height:1}.linkdel:hover{color:var(--critical);border-color:var(--critical)}.linkempty{font-size:12px;color:var(--muted);padding:2px 0} .sassign{position:relative;flex:0 0 120px;width:120px;max-width:120px;border:1px solid var(--border);border-radius:6px;padding:2px 6px} .saname{font-size:11px;color:var(--muted);display:block;line-height:1.2;overflow-wrap:anywhere} .saedit{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;font-size:11px}
 .sub .sx{cursor:pointer;color:var(--muted);font-size:14px;border:none;background:none}
 .sub-add{display:flex;gap:8px;margin-top:9px}
 .sub-add input{flex:1}
@@ -953,13 +953,13 @@ async function delProject(id){
 /* ---------- Modais ---------- */
 function closeModal(){$('#overlay').classList.remove('open');}
 function openTaskModal(id){
-  const t=id?DB.tasks.find(x=>x.id===id):null; window._lockProj=(!id&&typeof currentProject!=='undefined'&&currentProject)?currentProject:null;
+  const t=id?DB.tasks.find(x=>x.id===id):null; window._lockProj=(!id&&typeof currentProject!=='undefined'&&currentProject)?currentProject:null; window._taskLinks=t?(t.links||[]).map(parseLink).filter(Boolean):[];
   if(!DB.projects.length){alert('Crie um projeto antes de adicionar tarefas.');return;}
   window._liderados = t?(t.liderados||[]).slice():[];
   const editable=canEditTask(t);
   $('#modal').innerHTML = editable ? editTaskModalHtml(t) : viewTaskModalHtml(t);
   $('#overlay').classList.add('open');
-  if(editable) setTimeout(()=>{const f=$('#f_title');if(f)f.focus();const d=$('#f_desc');if(d)autoGrow(d);},50);
+  if(editable) setTimeout(()=>{const f=$('#f_title');if(f)f.focus();const d=$('#f_desc');if(d)autoGrow(d);renderTaskLinks();},50);
 }
 function liderChipsHtml(leaderId){
   const ppl=DB.people.filter(p=>p.level!=='novo' && p.id!==leaderId);
@@ -977,7 +977,7 @@ function onLeaderChange(v){
   window._liderados=(window._liderados||[]).filter(u=>u!==v);
   const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
 }
-function lhref(u){u=(u||'').trim();return /^https?:\/\//i.test(u)?u:'https://'+u;} function linkify(x){return (x||'').replace(/((https?:\/\/|www\.)[^\s<]+)/gi,m=>'<a href="'+(/^https?:/i.test(m)?m:'https://'+m)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+m+'</a>');} function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
+function parseLink(s){s=(s||'').trim();if(!s)return null;if(s.charAt(0)==='{'){try{const o=JSON.parse(s);return {d:(o.d||'').trim(),u:(o.u||'').trim()};}catch(e){}}const m=s.match(/^(.*\S)\s+[-–—]\s+((?:https?:\/\/|www\.)\S.*)$/i);if(m)return {d:m[1].trim(),u:m[2].trim()};return {d:'',u:s};} function renderTaskLinks(){const box=document.getElementById('linksList');if(!box)return;const L=window._taskLinks||[];box.innerHTML=L.length?L.map((x,i)=>`<div class="linkrow"><a href="${lhref(x.u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${x.d?esc(x.d)+' — ':''}${esc(x.u)}</a><button type="button" class="linkdel" onclick="removeTaskLink(${i})" title="Remover">✕</button></div>`).join(''):'<div class="linkempty">Nenhum anexo ainda.</div>';} function addTaskLink(){const uu=document.getElementById('f_linkUrl');if(!uu)return;const u=(uu.value||'').trim();if(!u){uu.style.borderColor='var(--critical)';return;}uu.style.borderColor='';const du=document.getElementById('f_linkDesc');const d=(du&&du.value||'').trim();window._taskLinks=window._taskLinks||[];window._taskLinks.push({d,u});if(du)du.value='';uu.value='';renderTaskLinks();if(du)du.focus();} function removeTaskLink(i){if(!window._taskLinks)return;window._taskLinks.splice(i,1);renderTaskLinks();} function collectTaskLinks(){const uu=document.getElementById('f_linkUrl');if(uu&&uu.value.trim()){const du=document.getElementById('f_linkDesc');window._taskLinks=window._taskLinks||[];window._taskLinks.push({d:(du?du.value.trim():''),u:uu.value.trim()});if(du)du.value='';uu.value='';}return (window._taskLinks||[]).map(x=>JSON.stringify({d:x.d||'',u:x.u||''}));} function lhref(u){u=(u||'').trim();return /^https?:\/\//i.test(u)?u:'https://'+u;} function linkify(x){return (x||'').replace(/((https?:\/\/|www\.)[^\s<]+)/gi,m=>'<a href="'+(/^https?:/i.test(m)?m:'https://'+m)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+m+'</a>');} function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
   const ppl=DB.people.filter(p=>p.level!=='novo');
   return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
@@ -1001,8 +1001,7 @@ function editTaskModalHtml(t){
     <div class="modal-head"><h3>${t?'Editar tarefa':'Nova tarefa'}</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><input id="f_title" value="${t?esc(t.title):''}" placeholder="O que precisa ser feito?"></div>
-      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div><div class="field"><label>Anexos (links)</label><textarea id="f_links" rows="2" style="resize:none;overflow:hidden;min-height:40px" oninput="autoGrow(this)" placeholder="Cole links aqui, um por linha">${t&&t.links?t.links.join(String.fromCharCode(10
-)):''}</textarea>${t&&t.links&&t.links.length?`<div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div>`:''}</div>
+      <div class="field"><label>Descrição</label><textarea id="f_desc" rows="2" maxlength="2000" oninput="autoGrow(this)" style="resize:none;overflow:hidden;min-height:52px" placeholder="Detalhes (opcional)">${t?esc(t.desc):''}</textarea></div><div class="field"><label>Anexos (links)</label><div class="linkadd"><input id="f_linkDesc" placeholder="Descrição (opcional)" onkeydown="if(event.key==='Enter'){event.preventDefault();var u=document.getElementById('f_linkUrl');if(u)u.focus();}"><input id="f_linkUrl" placeholder="Cole o link e tecle Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addTaskLink();}"><button type="button" class="btn sm ghost" onclick="addTaskLink()">+ Adicionar</button></div><div class="linklist" id="linksList"></div></div>
       <div class="field-row">
         <div class="field"><label>Projeto</label><select id="f_proj" ${(!t&&window._lockProj)?'disabled':''}>${DB.projects.map(p=>`<option value="${p.id}" ${((t&&t.proj===p.id)||(!t&&window._lockProj===p.id))?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Líder (responsável)</label><select id="f_owner" onchange="onLeaderChange(this.value)">${DB.people.filter(p=>p.level!=='novo').map(p=>`<option value="${p.id}" ${p.id===leader?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
@@ -1026,7 +1025,7 @@ function viewTaskModalHtml(t){
     <div class="modal-head"><h3>Tarefa</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Título</label><div style="font-weight:650;font-size:15px">${esc(t.title)}</div></div>
-      ${t.desc?`<div class="field"><label>Descrição</label><div style="font-size:13px;color:var(--text-2);line-height:1.5;white-space:pre-wrap">${linkify(esc(t.desc))}</div></div>`:''}${t.links&&t.links.length?`<div class="field"><label>Anexos</label><div class="linklist">${t.links.map(u=>`<a href="${lhref(u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${esc(u)}</a>`).join('')}</div></div>`:''}
+      ${t.desc?`<div class="field"><label>Descrição</label><div style="font-size:13px;color:var(--text-2);line-height:1.5;white-space:pre-wrap">${linkify(esc(t.desc))}</div></div>`:''}${t.links&&t.links.length?`<div class="field"><label>Anexos</label><div class="linklist">${t.links.map(parseLink).filter(Boolean).map(x=>`<a href="${lhref(x.u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${x.d?esc(x.d)+' — ':''}${esc(x.u)}</a>`).join('')}</div></div>`:''}
       <div class="field-row">
         <div class="field"><label>Projeto</label><div style="font-size:13px">${p?esc(p.name):'—'}</div></div>
         <div class="field"><label>Líder (responsável)</label><div style="display:flex;align-items:center;gap:7px">${avatar(t.owner,'sm')}<span style="font-size:13px">${esc(person(t.owner).name)}</span></div></div>
@@ -1045,8 +1044,7 @@ function viewTaskModalHtml(t){
 async function saveTask(id){
   const g=x=>{const e=$('#f_'+x);return e?e.value:'';};
   const title=g('title').trim();if(!title){const e=$('#f_title');if(e)e.style.borderColor='var(--critical)';return;}
-  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:(g('links')||'').split(String.fromCharCode(10
-)).map(s=>s.trim()).filter(Boolean)};
+  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:collectTaskLinks()};
   const btn=$('#saveTaskBtn');if(btn)btn.disabled=true;
   let taskId=id;
   if(id){ const {error}=await sb.from('tasks').update(row).eq('id',id); if(error){showToast('⚠️ Sem permissão para editar esta tarefa.');if(btn)btn.disabled=false;return;} }
