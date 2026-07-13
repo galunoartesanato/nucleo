@@ -521,6 +521,13 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     if(session && session.user){ if(!currentUser){ currentUser=session.user.id; boot(); } }
     else { currentUser=null; showAuth(); }
   });
+  const cfq=new URLSearchParams(window.location.search).get('confirm');
+  if(cfq){
+    try{ history.replaceState({},'',window.location.pathname); }catch(e){}
+    const {error:cfErr}=await sb.auth.verifyOtp({token_hash:cfq,type:'email'});
+    if(cfErr) authErrMsg='o link de confirmação expirou ou já foi usado (se pedirem confirmação no login, use o botão Reenviar)';
+    else confirmMsg='Seu e-mail foi confirmado com sucesso! 🎉';
+  }
   const {data:{session}}=await sb.auth.getSession();
   if(recoveryMode){
     if(session && session.user){ currentUser=session.user.id; showNewPassword(); }
