@@ -557,6 +557,25 @@ function authTab(m){
 }
 function authMsg(t,type){const el=document.getElementById('authMsg');el.textContent=t;el.className='auth-msg '+type;}
 function hideAuthMsg(){document.getElementById('authMsg').className='auth-msg';}
+function offerResend(email){
+  window._resendEmail=email;
+  const el=document.getElementById('authMsg');
+  if(!el||el.querySelector('button'))return;
+  const b=document.createElement('button');
+  b.type='button';b.textContent='Reenviar e-mail de confirmação';
+  b.style.cssText='display:block;margin:8px auto 0;padding:6px 12px;border-radius:8px;background:var(--brand);color:#fff;font-weight:650;cursor:pointer;border:none';
+  b.onclick=resendConfirm;
+  el.appendChild(b);
+}
+async function resendConfirm(){
+  const email=window._resendEmail; if(!email) return;
+  const captchaToken=getCaptcha();
+  if(!captchaToken){authMsg('Refaça a verificação "sou humano" e clique de novo em reenviar.','err');offerResend(email);return;}
+  const {error}=await sb.auth.resend({type:'signup',email,options:{captchaToken}});
+  resetCaptcha();
+  if(error){authMsg(traduz(error.message),'err');offerResend(email);}
+  else authMsg('E-mail de confirmação reenviado! Aguarde alguns minutos, confira o spam e use sempre o link mais recente.','ok');
+}
 function togglePass(id,btn){
   const i=document.getElementById(id); if(!i)return;
   const show = i.type==='password';
@@ -588,7 +607,7 @@ async function authSubmit(){
   try{
     if(authMode==='login'){
       const {error}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken}});
-      if(error) authMsg(traduz(error.message),'err');
+      if(error){authMsg(traduz(error.message),'err');if((error.message||'').toLowerCase().includes('not confirmed'))offerResend(email);}
     } else {
       const name=document.getElementById('auName').value.trim();
       const role=document.getElementById('auRole').value.trim()||'Colaborador';
@@ -606,8 +625,10 @@ function traduz(m){
   m=(m||'').toLowerCase();
   if(m.includes('invalid login')) return 'E-mail ou senha incorretos.';
   if(m.includes('already registered')) return 'Este e-mail já tem conta. Faça login.';
-  if(m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar (veja sua caixa de entrada).';
+  if(m.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar. Use o link do e-mail MAIS RECENTE (confira também o spam).';
   if(m.includes('password')) return 'Senha inválida (mínimo 8 caracteres).';
+  if(m.includes('rate limit')) return 'Limite de envio de e-mails atingido. Aguarde um pouco e tente de novo.';
+  if(m.includes('for security purposes')) return 'Por segurança, aguarde alguns segundos antes de tentar de novo.';
   return m;
 }
 async function doLogout(){ await sb.auth.signOut(); currentUser=null; location.reload(); }
