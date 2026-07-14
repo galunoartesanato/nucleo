@@ -436,7 +436,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
   <div class="msheet-wrap" id="msheetWrap" onclick="if(event.target===this)toggleMoreSheet(false)"><div class="msheet" id="msheet"></div></div>
 </div>
 
-<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+<div class="overlay" id="overlay" onpointerdown="window._ovDown=(event.target===this)" onclick="if(event.target===this&&window._ovDown)closeModal();window._ovDown=false">
   <div class="modal" id="modal"></div>
 </div>
 
