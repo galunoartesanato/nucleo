@@ -526,7 +526,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     if(event==='PASSWORD_RECOVERY'){ recoveryMode=true; if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
     if(recoveryMode){ if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
     if(session && session.user){ if(!currentUser){ currentUser=session.user.id; boot(); } }
-    else { currentUser=null; showAuth(); }
+    else if(event==='SIGNED_OUT'||event==='INITIAL_SESSION'){ currentUser=null; showAuth(); }
   });
   const cfq=new URLSearchParams(window.location.search).get('confirm');
   if(cfq){
@@ -740,10 +740,25 @@ async function reload(){ await loadAll(); renderAll(); }
 
 let rtTimer=null;
 function subscribeRealtime(){
-  try{if(window._rtChan){sb.removeChannel(window._rtChan);window._rtChan=null;}}catch(e){} window._rtChan=sb.channel('nucleo-rt'); window._rtChan.on('postgres_changes',{event:'*',schema:'public'},()=>{
-    if(document.getElementById('overlay').classList.contains('open')) return; // não interrompe edição
+  try{if(window._rtChan){sb.removeChannel(window._rtChan);window._rtChan=null;}}catch(e){} function rtBusy(){
+  const ae=document.activeElement;
+  const editing=!!(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable));
+  const sel=!!(window.getSelection&&window.getSelection().rangeCount&&!window.getSelection().isCollapsed);
+  const modal=document.getElementById('overlay').classList.contains('open');
+  return modal||editing||sel||!!window._dragging;
+}
+async function rtApply(){
+  if(rtBusy()){ clearTimeout(rtTimer); rtTimer=setTimeout(rtApply,2500); return; }
+  const m=document.querySelector('.main'); const sc=m?m.scrollTop:0;
+  await loadAll(); renderView(); renderNav();
+  const m2=document.querySelector('.main'); if(m2) m2.scrollTop=sc;
+}
+document.addEventListener('dragstart',()=>{window._dragging=true;});
+document.addEventListener('dragend',()=>{window._dragging=false;});
+document.addEventListener('drop',()=>{setTimeout(()=>{window._dragging=false;},50);});
+window._rtChan=sb.channel('nucleo-rt'); window._rtChan.on('postgres_changes',{event:'*',schema:'public'},()=>{
     clearTimeout(rtTimer);
-    rtTimer=setTimeout(async ()=>{ await loadAll(); renderView(); renderNav(); }, 400);
+    rtTimer=setTimeout(rtApply, 400);
   }).subscribe();
 }
 
@@ -967,7 +982,8 @@ function viewEquipe(){
         <span class="tag" style="background:${lv.bg};color:${lv.color};margin-top:9px">${lv.label}</span>
         ${levelControl(p)}
         <div class="mstats"><div><b>${open}</b><span>Abertas</span></div><div><b>${done}</b><span>Feitas</span></div><div><b>${ts.length}</b><span>Total</span></div></div>
-        ${canDeleteUser(p)?`<button class="btn ghost" style="margin-top:10px;color:var(--critical);font-size:12px;padding:6px 10px" onclick="delUser('${p.id}')">🗑 Excluir cadastro</button>`:''}
+        ${(canManage||p.id===currentUser)?`<button class="btn ghost" style="margin-top:10px;font-size:12px;padding:6px 10px" onclick="openMemberModal('${p.id}')">✎ Editar dados</button>`:''}
+      ${canDeleteUser(p)?`<button class="btn ghost" style="margin-top:10px;color:var(--critical);font-size:12px;padding:6px 10px" onclick="delUser('${p.id}')">🗑 Excluir cadastro</button>`:''}
       </div>`;
     }).join('')}
     <div class="member" style="cursor:pointer;border-style:dashed;justify-content:center;color:var(--muted)" onclick="openInviteInfo()"><div style="font-size:30px">＋</div><div class="mn" style="color:var(--text-2)">Convidar pessoa</div><div class="mr">como adicionar</div></div>
@@ -1191,6 +1207,26 @@ async function refreshSubs(taskId){
   await loadAll();
   const el=$('#subList'); if(el) el.innerHTML=subListHtml(taskId);
   renderView(); renderNav();
+}
+function openMemberModal(id){
+  const p=DB.people.find(x=>x.id===id);
+  if(!p) return;
+  window._medit=id;
+  $('#modal').innerHTML=`
+    <div class="modal-head"><h3>Editar dados</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
+    <div class="field"><label>Nome</label><input id="f_mname" value="${esc(p.name)}"></div>
+    <div class="field"><label>Função (cargo)</label><input id="f_mrole" placeholder="Ex: Auxiliar administrativo" value="${esc(p.role)}"></div>
+    <div class="modal-foot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveMember()">Salvar alterações</button></div>`;
+  $('#overlay').classList.add('open');setTimeout(()=>$('#f_mname').focus(),50);
+}
+async function saveMember(){
+  const id=window._medit; if(!id) return;
+  const name=$('#f_mname').value.trim();
+  const role=$('#f_mrole').value.trim();
+  if(!name){ $('#f_mname').style.borderColor='var(--critical)'; return; }
+  const {error}=await sb.from('profiles').update({name,role}).eq('id',id);
+  if(error){ showToast('⚠️ Sem permissão para editar este cadastro.'); return; }
+  closeModal(); showToast('✅ Dados atualizados.'); await reload();
 }
 function openProjectModal(id){
   const p=id?DB.projects.find(x=>x.id===id):null;
