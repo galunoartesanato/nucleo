@@ -748,7 +748,7 @@ async function loadAll(){
   DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role,level:r.level||'novo'}));DB.routines=(rt.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',assignee:r.assignee_id,freq:r.freq,weekdays:r.weekdays||[],monthDay:r.month_day,prio:r.prio||'baixa',active:r.active!==false,createdBy:r.created_by,createdAt:r.created_at}));DB.routineDone=(rd.data||[]).map(r=>({id:r.id,routine:r.routine_id,date:r.done_date,by:r.done_by}));
   DB.projects=(pj.data||[]).map(r=>({id:r.id,name:r.name,color:r.color||'#2a78d6',createdBy:r.created_by}));
   const assignees=ta.data||[], subs=st.data||[];
-  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',completedAt:r.completed_at||null,createdBy:r.created_by,links:r.links||[],
+  DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',completedAt:r.completed_at||null,createdBy:r.created_by,links:r.links||[],reviewNote:r.review_note||'',
     liderados:assignees.filter(a=>a.task_id===r.id).map(a=>a.user_id),
     subtasks:subs.filter(s=>s.task_id===r.id).map(s=>({id:s.id,title:s.title,done:!!s.done,assignee:s.assignee_id,createdBy:s.created_by}))}));
   const comments=cm.data||[], likes=lk.data||[];
@@ -1140,7 +1140,7 @@ function calNav(dir){calMonth.m+=dir;if(calMonth.m<0){calMonth.m=11;calMonth.y--
 
 /* ---------- Ações de tarefa ---------- */
 async function toggleDone(id){const t=DB.tasks.find(x=>x.id===id);if(!t||!canEditTask(t))return;const prev=t.status;const st=t.status==='done'?'todo':'done';t.status=st;renderView();renderNav();const {error}=await sb.from('tasks').update({status:st,completed_at:st==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');renderView();renderNav();}}
-async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);if(!t)return;const prev=t.status;t.status=s;const {error}=await sb.from('tasks').update({status:s,completed_at:s==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');}renderView();renderNav();}
+async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);if(!t)return;const prev=t.status;t.status=s;const {error}=await sb.from('tasks').update({status:s,completed_at:s==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');}renderView();renderNav();if(s==='review'&&!error){ openTaskModal(id); showToast('📝 Descreva o que precisa ser revisado e por quem.'); }}
 async function duplicateTask(id){
   const t=DB.tasks.find(x=>x.id===id);if(!t)return;
   const row={title:t.title+' (cópia)',description:t.desc||'',project_id:t.proj,owner_id:t.owner,prio:t.prio,status:'todo',due:null,links:t.links||[],created_by:currentUser};
@@ -1221,7 +1221,8 @@ function editTaskModalHtml(t){
         <div class="field"><label>Prioridade</label><select id="f_prio"><option value="baixa" ${!t||t.prio==='baixa'?'selected':''}>Baixa</option><option value="media" ${t&&t.prio==='media'?'selected':''}>Média</option><option value="alta" ${t&&t.prio==='alta'?'selected':''}>Alta</option></select></div>
         <div class="field"><label>Prazo</label><input type="date" id="f_due" value="${t?t.due||'':''}" onclick="try{this.showPicker()}catch(e){}" onchange="fixWeekendDue(this)"></div>
       </div>
-      <div class="field"><label>Status</label><select id="f_status">${STATUS.map(s=>`<option value="${s.id}" ${t&&t.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
+      <div class="field"><label>Status</label><select id="f_status" onchange="const w=document.getElementById('revWrap');if(w)w.style.display=this.value==='review'?'':'none'">${STATUS.map(s=>`<option value="${s.id}" ${t&&t.status===s.id?'selected':''}>${s.label}</option>`).join('')}</select></div>
+      <div class="field" id="revWrap" style="${t&&t.status==='review'?'':'display:none'}"><label>Revisão — o que precisa ser revisado e por quem</label><textarea id="f_revnote" rows="3" placeholder="Ex: revisar a legenda do vídeo — revisar com a Aline">${t&&t.reviewNote?esc(t.reviewNote):''}</textarea></div>
       ${t?`<div class="field"><label>Subtarefas (checklist)</label><div class="subs" id="subList">${subListHtml(t.id)}</div>
         <div class="sub-add"><input id="f_subtitle" placeholder="Nova subtarefa..." onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask('${t.id}')}"><select id="f_subassignee" style="max-width:150px">${subAssigneeOptions()}</select><button class="btn" onclick="addSubtask('${t.id}')">＋</button></div></div>`
       :`<div class="note-sm">Salve a tarefa para poder adicionar subtarefas (checklist).</div>`}
@@ -1254,7 +1255,7 @@ function viewTaskModalHtml(t){
 async function saveTask(id){
   const g=x=>{const e=$('#f_'+x);return e?e.value:'';};
   const title=g('title').trim();if(!title){const e=$('#f_title');if(e)e.style.borderColor='var(--critical)';return;}
-  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:collectTaskLinks()};
+  const row={title,description:g('desc').trim(),project_id:g('proj'),owner_id:g('owner'),prio:g('prio'),status:g('status'),due:g('due')||null,links:collectTaskLinks(),review_note:(($('#f_revnote')||{}).value||'').trim()||null};
   const prevSt=id?((DB.tasks.find(x=>x.id===id)||{}).status||null):null;
   if(row.status==='done'&&prevSt!=='done')row.completed_at=new Date().toISOString(); else if(row.status!=='done')row.completed_at=null;
   const btn=$('#saveTaskBtn');if(btn)btn.disabled=true;
