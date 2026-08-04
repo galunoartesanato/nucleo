@@ -848,7 +848,7 @@ function primaryAction(){
 function renderAll(){renderNav();renderView();}
 function renderView(){
   const t=TITLES[route];
-  $('#pageTitle').textContent=(route==='projetos'&&currentProject)?project(currentProject).name:t[0];
+  $('#pageTitle').textContent=(route==='projetos'&&currentProject)?(currentProject==='all'?'Quadro geral — todos os projetos':(project(currentProject)||{name:'Projeto'}).name):t[0];
   $('#pageSub').textContent=(route==='projetos'&&currentProject)?'Quadro Kanban':t[1];
   $('#primaryLabel').textContent=(route==='projetos'&&currentProject)?'Nova tarefa':PRIMARY[route];
   document.body.dataset.route=route;
