@@ -372,6 +372,13 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .wkb-tag{font-size:9.5px;color:var(--muted);margin-left:5px}
 .wkb-empty{color:var(--muted);font-size:11px;text-align:center;padding:8px 0}
 @media (max-width:760px){.wkb{display:flex;overflow-x:auto;gap:8px}.wkb-col{min-width:150px;flex:0 0 150px}}
+#notifPanel{position:fixed;top:64px;right:18px;width:340px;max-height:60vh;overflow-y:auto;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);z-index:80;display:none}
+.np-head{font-weight:800;font-size:13px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.np-item{padding:10px 14px;border-bottom:1px solid var(--border-2);font-size:12.5px;cursor:pointer}
+.np-item.unread{background:var(--brand-wash)}
+.np-item small{color:var(--muted);font-size:10.5px}
+.np-empty{padding:18px;color:var(--muted);font-size:12.5px;text-align:center}
+@media (max-width:760px){#notifPanel{left:10px;right:10px;width:auto;top:calc(60px + env(safe-area-inset-top))}}
 </style>
 </head>
 <body>
@@ -448,6 +455,7 @@ input,textarea,select{font-family:inherit;font-size:14px}
         <div class="sub" id="pageSub"></div>
       </div>
       <div style="flex:1"></div>
+      <button class="icon-btn" id="notifBell" title="Notificações" onclick="toggleNotifPanel()" style="position:relative;font-size:16px">🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--critical);color:#fff;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 5px;min-width:16px;text-align:center">0</span></button>
       <div class="search"><span>🔍</span><input id="search" placeholder="Buscar tarefas..." oninput="onSearch(this.value)"></div>
       <button class="btn" id="primaryBtn" onclick="primaryAction()"><span>＋</span><span id="primaryLabel">Nova tarefa</span></button>
     </div>
@@ -735,7 +743,7 @@ async function ensureProfile(){
 
 /* ---------- Data layer ---------- */
 async function loadAll(){
-  const [pf,pj,tk,po,cm,lk,ta,st,rt,rd]=await Promise.all([
+  const [pf,pj,tk,po,cm,lk,ta,st,rt,rd,nf]=await Promise.all([
     sb.from('profiles').select('*').order('created_at'),
     sb.from('projects').select('*').order('created_at'),
     sb.from('tasks').select('*').order('created_at'),
@@ -744,8 +752,10 @@ async function loadAll(){
     sb.from('likes').select('*'),
     sb.from('task_assignees').select('*'),
     sb.from('subtasks').select('*').order('created_at'),    sb.from('routines').select('*').order('created_at'),    sb.from('routine_done').select('*'),
+    sb.from('notifications').select('*').eq('user_id',currentUser).order('created_at',{ascending:false}).limit(60),
   ]);
   DB.people=(pf.data||[]).map(r=>({id:r.id,name:r.name,role:r.role,level:r.level||'novo'}));DB.routines=(rt.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',assignee:r.assignee_id,freq:r.freq,weekdays:r.weekdays||[],monthDay:r.month_day,prio:r.prio||'baixa',active:r.active!==false,createdBy:r.created_by,createdAt:r.created_at}));DB.routineDone=(rd.data||[]).map(r=>({id:r.id,routine:r.routine_id,date:r.done_date,by:r.done_by}));
+  DB.notifs=((nf&&nf.data)||[]).map(r=>({id:r.id,actor:r.actor_id,task:r.task_id,text:r.text,read:r.read,at:r.created_at}));
   DB.projects=(pj.data||[]).map(r=>({id:r.id,name:r.name,color:r.color||'#2a78d6',createdBy:r.created_by}));
   const assignees=ta.data||[], subs=st.data||[];
   DB.tasks=(tk.data||[]).map(r=>({id:r.id,title:r.title,desc:r.description||'',proj:r.project_id,owner:r.owner_id,prio:r.prio||'media',status:r.status||'todo',due:r.due||'',completedAt:r.completed_at||null,createdBy:r.created_by,links:r.links||[],reviewNote:r.review_note||'',
@@ -830,7 +840,34 @@ function renderMoreSheet(){
   const items=PAGES.filter(p=>['projetos','mural','equipe','calendario'].includes(p.id));
   s.innerHTML=`<div class="msheet-grab"></div><div class="msheet-prof">${avatar(currentUser)}<div><div class="mspn">${esc(currentProfile?.name||'')}</div><div class="mspr">${esc(currentProfile?.role||'')}</div></div></div>${items.map(p=>`<button class="msheet-item" onclick="go('${p.id}')"><span class="msi">${p.ic}</span>${p.label}${p.id==='mural'&&DB.posts.length?`<span class="msbadge">${DB.posts.length}</span>`:''}<span class="msar">›</span></button>`).join('')}<button class="msheet-item" onclick="toggleTheme();renderMoreSheet()"><span class="msi">${currentTheme()==='dark'?'☀️':'🌙'}</span>Mudar para tema ${currentTheme()==='dark'?'claro':'escuro'}<span class="msar">›</span></button><button class="msheet-item msheet-out" onclick="doLogout()"><span class="msi">⎋</span>Sair da conta</button>`;
 }
+function toggleNotifPanel(){
+  let p=document.getElementById('notifPanel');
+  if(!p){ p=document.createElement('div'); p.id='notifPanel'; document.body.appendChild(p); }
+  if(p.style.display==='block'){ p.style.display='none'; return; }
+  const list=(DB.notifs||[]);
+  p.innerHTML='<div class="np-head">🔔 Notificações</div>'+(list.length?list.map(n=>`<div class="np-item ${n.read?'':'unread'}" onclick="${n.task?`closeNotifPanel();openTaskModal('${n.task}')`:''}"><div>${esc(n.text)}</div><small>${relTime(n.at)}</small></div>`).join(''):'<div class="np-empty">Nenhuma notificação ainda.</div>');
+  p.style.display='block';
+  markNotifsRead();
+}
+function closeNotifPanel(){const p=document.getElementById('notifPanel'); if(p)p.style.display='none';}
+async function markNotifsRead(){
+  const un=(DB.notifs||[]).filter(n=>!n.read);
+  if(!un.length) return;
+  await sb.from('notifications').update({read:true}).eq('user_id',currentUser).eq('read',false);
+  un.forEach(n=>n.read=true);
+  renderNav();
+}
+async function notifyTask(t,msg){
+  try{
+    const dest=new Set([t.owner,t.createdBy,...(t.liderados||[])]);
+    dest.delete(currentUser);
+    const rows=[...dest].filter(Boolean).map(uid=>({user_id:uid,actor_id:currentUser,task_id:t.id,text:msg}));
+    if(rows.length) await sb.from('notifications').insert(rows);
+  }catch(e){}
+}
 function renderNav(){
+  const nb=document.getElementById('notifBadge');
+  if(nb){ const n=(DB.notifs||[]).filter(x=>!x.read).length; nb.textContent=n>9?'9+':String(n); nb.style.display=n?'':'none'; }
   const openTasks=DB.tasks.filter(t=>t.status!=='done'&&(t.owner===currentUser||(t.liderados||[]).includes(currentUser))).length;
   $('#nav').innerHTML=PAGES.map(p=>{
     let badge='';
@@ -1140,7 +1177,7 @@ function calNav(dir){calMonth.m+=dir;if(calMonth.m<0){calMonth.m=11;calMonth.y--
 
 /* ---------- Ações de tarefa ---------- */
 async function toggleDone(id){const t=DB.tasks.find(x=>x.id===id);if(!t||!canEditTask(t))return;const prev=t.status;const st=t.status==='done'?'todo':'done';t.status=st;renderView();renderNav();const {error}=await sb.from('tasks').update({status:st,completed_at:st==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');renderView();renderNav();}}
-async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);if(!t)return;const prev=t.status;t.status=s;const {error}=await sb.from('tasks').update({status:s,completed_at:s==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');}renderView();renderNav();if(s==='review'&&!error){ openTaskModal(id); showToast('📝 Descreva o que precisa ser revisado e por quem.'); }}
+async function setStatus(id,s){const t=DB.tasks.find(x=>x.id===id);if(!t)return;const prev=t.status;t.status=s;const {error}=await sb.from('tasks').update({status:s,completed_at:s==='done'?new Date().toISOString():null}).eq('id',id);if(error){t.status=prev;showToast('⚠️ Sem permissão para alterar esta tarefa.');}if(!error&&prev!==s){ notifyTask(t, shortName(currentUser)+' moveu "'+t.title+'" para '+((STATUS.find(x=>x.id===s)||{}).label||s)); }renderView();renderNav();if(s==='review'&&!error){ openTaskModal(id); showToast('📝 Descreva o que precisa ser revisado e por quem.'); }}
 async function duplicateTask(id){
   const t=DB.tasks.find(x=>x.id===id);if(!t)return;
   const row={title:t.title+' (cópia)',description:t.desc||'',project_id:t.proj,owner_id:t.owner,prio:t.prio,status:'todo',due:null,links:t.links||[],created_by:currentUser};
