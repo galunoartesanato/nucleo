@@ -379,6 +379,10 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .np-item small{color:var(--muted);font-size:10.5px}
 .np-empty{padding:18px;color:var(--muted);font-size:12.5px;text-align:center}
 @media (max-width:760px){#notifPanel{left:10px;right:10px;width:auto;top:calc(60px + env(safe-area-inset-top))}}
+.pf-row{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border-2);font-size:13px}
+.pf-row a{color:var(--text-1);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf-row a:hover{color:var(--brand)}
+.pf-meta{font-size:10.5px;color:var(--muted);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1031,7 +1035,7 @@ function globalKanbanTasks(){
 function viewKanban(){
   if(currentProject!=='all'&&!isManager()&&!userInProject(currentProject,currentUser)){ currentProject=null; return viewProjetos(); }
   const ts=(currentProject==='all'?globalKanbanTasks():DB.tasks.filter(t=>t.proj===currentProject)).filter(t=>taskMatchesFilters(t,{}));
-  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="btn ghost sm" onclick="currentProject=null;renderView()">← Voltar aos projetos</button><div style="flex:1"></div>${currentProject!=='all'?`<button class="icon-btn" title="Editar projeto" onclick="openProjectModal('${currentProject}')">✎</button>`:''}${isManager()&&currentProject!=='all'?`<button class="icon-btn" title="Excluir projeto (apaga também as tarefas dele)" onclick="delProject('${currentProject}')">🗑</button>`:''}</div>
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="btn ghost sm" onclick="currentProject=null;renderView()">← Voltar aos projetos</button><div style="flex:1"></div>${currentProject!=='all'?`<button class="icon-btn" title="Arquivos do projeto" onclick="openProjectFiles('${currentProject}')">📎</button><button class="icon-btn" title="Editar projeto" onclick="openProjectModal('${currentProject}')">✎</button>`:''}${isManager()&&currentProject!=='all'?`<button class="icon-btn" title="Excluir projeto (apaga também as tarefas dele)" onclick="delProject('${currentProject}')">🗑</button>`:''}</div>
   <div class="filters">${filterBarHtml({date:true})}<div style="flex:1"></div><span style="color:var(--muted);font-size:12.5px">${ts.length} tarefa(s)</span></div>
   <div class="kanban">${STATUS.map(s=>{
     const col=ts.filter(t=>t.status===s.id).sort(cmpTasks);
@@ -1332,6 +1336,51 @@ async function refreshSubs(taskId){
   await loadAll();
   const el=$('#subList'); if(el) el.innerHTML=subListHtml(taskId);
   renderView(); renderNav();
+}
+async function openProjectFiles(pid){
+  window._pfProj=pid;
+  $('#modal').innerHTML=`<div class="modal-head"><h3>📎 Arquivos do projeto</h3><div class="grow"></div><button class="icon-btn" onclick="closeModal()">✕</button></div>
+    <div id="pfList" style="max-height:40vh;overflow-y:auto;margin-bottom:12px"><div class="np-empty">Carregando…</div></div>
+    <div class="field"><label>Enviar arquivos (fotos, PDF, documentos — até 25 MB)</label><input type="file" id="pfFile" multiple onchange="uploadProjectFiles(this.files)"></div>
+    <div class="field"><label>Ou adicionar um link</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="pfLinkDesc" placeholder="Descrição (opcional)" style="flex:1;min-width:120px"><input id="pfLinkUrl" placeholder="https://..." style="flex:2;min-width:160px"><button class="btn" onclick="addProjectLink()">+ Adicionar</button></div></div>`;
+  $('#overlay').classList.add('open');
+  renderProjectFiles();
+}
+async function renderProjectFiles(){
+  const pid=window._pfProj;
+  const {data}=await sb.from('project_files').select('*').eq('project_id',pid).order('created_at',{ascending:false});
+  const el=document.getElementById('pfList'); if(!el) return;
+  const rows=data||[];
+  el.innerHTML=rows.length?rows.map(f=>`<div class="pf-row"><a href="${esc(f.url)}" target="_blank" rel="noopener">${f.kind==='link'?'🔗':'📄'} ${esc(f.name)}</a><span class="pf-meta">${esc(shortName(f.created_by)||'')} · ${relTime(f.created_at)}</span>${(isManager()||f.created_by===currentUser)?`<button class="icon-btn" title="Remover" onclick="delProjectFile('${f.id}')">🗑</button>`:''}</div>`).join(''):'<div class="np-empty">Nenhum arquivo ainda. Envie um arquivo ou cole um link.</div>';
+}
+async function uploadProjectFiles(files){
+  const pid=window._pfProj; if(!pid||!files||!files.length) return;
+  showToast('⏳ Enviando arquivo(s)…');
+  for(const file of files){
+    if(file.size>25*1024*1024){ showToast('⚠️ '+file.name+' passa de 25 MB.'); continue; }
+    const path=pid+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const {error}=await sb.storage.from('projfiles').upload(path,file);
+    if(error){ showToast('⚠️ Falha ao enviar '+file.name); continue; }
+    const url=sb.storage.from('projfiles').getPublicUrl(path).data.publicUrl;
+    await sb.from('project_files').insert({project_id:pid,name:file.name,url:url,kind:'file',size:file.size,created_by:currentUser});
+  }
+  showToast('✅ Arquivo(s) enviado(s).');
+  const inp=document.getElementById('pfFile'); if(inp) inp.value='';
+  renderProjectFiles();
+}
+async function addProjectLink(){
+  const pid=window._pfProj;
+  const d=$('#pfLinkDesc').value.trim(), u=$('#pfLinkUrl').value.trim();
+  if(!u){ $('#pfLinkUrl').style.borderColor='var(--critical)'; return; }
+  await sb.from('project_files').insert({project_id:pid,name:d||u,url:u,kind:'link',created_by:currentUser});
+  $('#pfLinkDesc').value='';$('#pfLinkUrl').value='';
+  renderProjectFiles();
+}
+async function delProjectFile(id){
+  if(!confirm('Remover este arquivo da lista do projeto?')) return;
+  const {error}=await sb.from('project_files').delete().eq('id',id);
+  if(error){ showToast('⚠️ Sem permissão para remover.'); return; }
+  renderProjectFiles();
 }
 function openMemberModal(id){
   const p=DB.people.find(x=>x.id===id);
