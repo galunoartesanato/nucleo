@@ -351,6 +351,17 @@ input,textarea,select{font-family:inherit;font-size:14px}
   .auth-card{margin:0 14px}
 }
 
+.subrows{display:none}
+.subrows.open{display:block}
+@media (max-width:1200px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .painel-top{flex-wrap:wrap;gap:10px}
+}
+@media (max-width:1100px) and (min-width:761px){
+  .ttable{display:block;overflow-x:auto}
+  .ttable th,.ttable td{white-space:nowrap}
+  .ttable td:nth-child(2){white-space:normal;min-width:260px}
+}
 </style>
 </head>
 <body>
@@ -893,11 +904,11 @@ function viewTarefas(){
     ${tasks.length?`<table class="ttable"><thead><tr><th style="width:34px"></th><th>Tarefa</th><th>Projeto</th><th>Responsável</th><th>Prioridade</th><th>Prazo</th><th>Status</th><th></th></tr></thead><tbody>
     ${tasks.map(t=>{const s=statusOf(t.status);const p=project(t.proj);const ed=canEditTask(t);const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<tr>
       <td><div class="chk ${t.status==='done'?'done':''}" ${ed?`onclick="toggleDone('${t.id}')"`:'style="opacity:.45;cursor:default"'}>${t.status==='done'?'✓':''}</div></td>
-      <td class="title-cell" style="cursor:pointer" onclick="openTaskModal('${t.id}')">${esc(t.title)}${subN?` <span class="subprog">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}${subN?`<div class="subbar"><i style="width:${Math.round(subD/subN*100)}%"></i></div><div class="subrows">${t.subtasks.map(st=>{const cc=canEditTask(t)||st.assignee===currentUser||st.createdBy===currentUser;return `<div class="subrow ${st.done?'done':''}"><span class="minichk ${st.done?'on':''}" ${cc?`onclick="event.stopPropagation();toggleSubtask('${st.id}','${t.id}')"`:'style="cursor:default;opacity:.5"'}>${st.done?'✓':''}</span><span class="sname">${esc(st.title)}</span>${st.assignee?`<span class="sasg">${esc(shortName(st.assignee))}</span>`:''}</div>`;}).join('')}</div>`:''}</td>
+      <td class="title-cell" style="cursor:pointer" onclick="openTaskModal('${t.id}')"><span style="${t.status==='done'?'text-decoration:line-through;color:var(--good)':''}">${esc(t.title)}</span>${subN?` <span onclick="event.stopPropagation();const tr=this.closest('tr');const sr=tr&&tr.querySelector('.subrows');if(sr)sr.classList.toggle('open')" title="Mostrar/ocultar checklist" class="subprog" style="cursor:pointer">☑ ${subD}/${subN}</span>`:''}${t.desc?`<small>${esc(t.desc)}</small>`:''}${subN?`<div class="subbar"><i style="width:${Math.round(subD/subN*100)}%"></i></div><div class="subrows">${t.subtasks.map(st=>{const cc=canEditTask(t)||st.assignee===currentUser||st.createdBy===currentUser;return `<div class="subrow ${st.done?'done':''}"><span class="minichk ${st.done?'on':''}" ${cc?`onclick="event.stopPropagation();toggleSubtask('${st.id}','${t.id}')"`:'style="cursor:default;opacity:.5"'}>${st.done?'✓':''}</span><span class="sname">${esc(st.title)}</span>${st.assignee?`<span class="sasg">${esc(shortName(st.assignee))}</span>`:''}</div>`;}).join('')}</div>`:''}</td>
       <td>${p?`<span class="tag" style="background:var(--surface-3)"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</span>`:'—'}</td>
       <td><div style="display:flex;align-items:center;gap:5px">${avatar(t.owner,'sm')}<span style="font-size:12.5px">${esc(shortName(t.owner))}</span>${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,3).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></td>
       <td><span class="prio ${t.prio}">${t.prio}</span></td>
-      <td><span style="font-size:12.5px;color:${t.due&&daysUntil(t.due)<0&&t.status!=='done'?'var(--critical)':'var(--text-2)'};font-weight:600">${t.due?dueLabel(t.due):'—'}</span></td>
+      <td><span style="font-size:12.5px;color:${t.due&&daysUntil(t.due)<0&&t.status!=='done'?'var(--critical)':'var(--text-2)'};font-weight:600">${t.status==='done'?'—':(t.due?dueLabel(t.due):'—')}</span></td>
       <td>${ed?`<select onchange="setStatus('${t.id}',this.value)" style="border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--surface-2);color:${s.color};font-weight:700;font-size:12px;outline:none">${STATUS.map(o=>`<option value="${o.id}" ${o.id===t.status?'selected':''}>${o.label}</option>`).join('')}</select>`:`<span class="readonly-badge" style="background:var(--surface-3);color:${s.color};font-size:12px"><span class="dot" style="background:${s.raw}"></span> ${s.label}</span>`}</td>
       <td><div style="display:flex"><button class="icon-btn" onclick="openTaskModal('${t.id}')" title="${ed?'Editar':'Ver'}">${ed?'✎':'👁'}</button><button class="icon-btn" onclick="duplicateTask('${t.id}')" title="Duplicar tarefa">⧉</button>${canDeleteTask(t)?`<button class="icon-btn" onclick="delTask('${t.id}')" title="Excluir">🗑</button>`:''}</div></td>
     </tr>`;}).join('')}
@@ -919,7 +930,8 @@ function visibleProjects(){
 }
 function viewProjetos(){
   const vis=visibleProjects();
-  const selMgr=isManager()?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font-size:12.5px;color:var(--text-2);font-weight:650">Ver projetos de:</span><select onchange="projViewUser=this.value;renderView()"><option value="all">Todos os projetos</option>${DB.people.map(u=>`<option value="${u.id}" ${projViewUser===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></div>`:'';
+  const gbtn=`<button class="btn ghost sm" onclick="openProject('all')">🗂 Quadro geral</button>`;
+  const selMgr=isManager()?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><span style="font-size:12.5px;color:var(--text-2);font-weight:650">Ver projetos de:</span><select onchange="projViewUser=this.value;renderView()"><option value="all">Todos os projetos</option>${DB.people.map(u=>`<option value="${u.id}" ${projViewUser===u.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select><div style="flex:1"></div>${gbtn}</div>`:`<div style="display:flex;justify-content:flex-end;margin-bottom:14px">${gbtn}</div>`;
   if(DB.projects.length&&!vis.length)return selMgr+`<div class="empty" style="padding:70px 20px">${isManager()?'Nenhum projeto para esta pessoa.':'Você ainda não participa de nenhum projeto.<br>Peça a um gerente para te incluir em uma tarefa.'}</div>`;
   if(!DB.projects.length)return `<div class="empty" style="padding:70px 20px"><div class="ei">❏</div>Nenhum projeto ainda.<br>Clique em <b>Novo projeto</b> para começar.</div>`;
   return selMgr+`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
@@ -940,15 +952,20 @@ function viewProjetos(){
 function openProject(id){currentProject=id;renderView();}
 
 /* ---------- KANBAN ---------- */
+function globalKanbanTasks(){
+  if(isManager()) return DB.tasks;
+  const vp=new Set(visibleProjects().map(p=>p.id));
+  return DB.tasks.filter(t=>(t.proj&&vp.has(t.proj))||t.owner===currentUser||t.createdBy===currentUser||(t.liderados||[]).includes(currentUser));
+}
 function viewKanban(){
-  if(!isManager()&&!userInProject(currentProject,currentUser)){ currentProject=null; return viewProjetos(); }
-  const ts=DB.tasks.filter(t=>t.proj===currentProject&&taskMatchesFilters(t,{}));
-  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="btn ghost sm" onclick="currentProject=null;renderView()">← Voltar aos projetos</button><div style="flex:1"></div><button class="icon-btn" title="Editar projeto" onclick="openProjectModal('${currentProject}')">✎</button>${isManager()?`<button class="icon-btn" title="Excluir projeto (apaga também as tarefas dele)" onclick="delProject('${currentProject}')">🗑</button>`:''}</div>
+  if(currentProject!=='all'&&!isManager()&&!userInProject(currentProject,currentUser)){ currentProject=null; return viewProjetos(); }
+  const ts=(currentProject==='all'?globalKanbanTasks():DB.tasks.filter(t=>t.proj===currentProject)).filter(t=>taskMatchesFilters(t,{}));
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="btn ghost sm" onclick="currentProject=null;renderView()">← Voltar aos projetos</button><div style="flex:1"></div>${currentProject!=='all'?`<button class="icon-btn" title="Editar projeto" onclick="openProjectModal('${currentProject}')">✎</button>`:''}${isManager()&&currentProject!=='all'?`<button class="icon-btn" title="Excluir projeto (apaga também as tarefas dele)" onclick="delProject('${currentProject}')">🗑</button>`:''}</div>
   <div class="filters">${filterBarHtml({date:true})}<div style="flex:1"></div><span style="color:var(--muted);font-size:12.5px">${ts.length} tarefa(s)</span></div>
   <div class="kanban">${STATUS.map(s=>{
     const col=ts.filter(t=>t.status===s.id).sort(cmpTasks);
     return `<div class="kcol" data-status="${s.id}"><h3><span class="dot" style="background:${s.raw}"></span>${s.label}<span class="count">${col.length}</span></h3>
-    ${col.map(t=>{const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<div class="kcard" draggable="${canEditTask(t)?'true':'false'}" data-id="${t.id}" onclick="openTaskModal('${t.id}')"><div class="kt"><span class="ktitle">${esc(t.title)}</span>${subN?`<span class="ksub">☑${subD}/${subN}</span>`:''}</div><div class="kmeta"><div class="left"><span class="prio ${t.prio}">${t.prio}</span>${t.due?`<span style="font-size:11px;color:${daysUntil(t.due)<0&&s.id!=='done'?'var(--critical)':'var(--muted)'};font-weight:600">${dueLabel(t.due)}</span>`:''}</div><div style="display:flex;align-items:center">${avatar(t.owner,'sm')}${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,2).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></div></div>`;}).join('')}
+    ${col.map(t=>{const subN=(t.subtasks||[]).length;const subD=(t.subtasks||[]).filter(x=>x.done).length;return `<div class="kcard" draggable="${canEditTask(t)?'true':'false'}" data-id="${t.id}" onclick="openTaskModal('${t.id}')"><div class="kt"><span class="ktitle" style="${t.status==='done'?'text-decoration:line-through;color:var(--good)':''}">${esc(t.title)}</span>${currentProject==='all'&&t.proj&&project(t.proj)?`<span style="display:block;font-size:10.5px;color:var(--text-2);margin-top:2px"><span class="dot" style="background:${project(t.proj).color};display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px"></span>${esc(project(t.proj).name)}</span>`:''}${subN?`<span class="ksub">☑${subD}/${subN}</span>`:''}</div><div class="kmeta"><div class="left"><span class="prio ${t.prio}">${t.prio}</span>${t.due?`<span style="font-size:11px;color:${daysUntil(t.due)<0&&s.id!=='done'?'var(--critical)':'var(--muted)'};font-weight:600">${t.status==='done'?'—':dueLabel(t.due)}</span>`:''}</div><div style="display:flex;align-items:center">${avatar(t.owner,'sm')}${(t.liderados&&t.liderados.length)?`<span class="av-stack" style="margin-left:3px">${t.liderados.slice(0,2).map(o=>avatar(o,'sm')).join('')}</span>`:''}</div></div></div>`;}).join('')}
     </div>`;
   }).join('')}</div>`;
 }
