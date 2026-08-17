@@ -106,6 +106,9 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .kpi .k-foot b.bad{color:var(--critical)}
 
 .chartrow{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+.chartrow>*{min-width:0}
+.chartrow .list li,.chartrow .list li>*{min-width:0}
+@media (min-width:761px) and (max-width:1100px){ .chartrow{grid-template-columns:1fr} }
 .bars{display:flex;flex-direction:column;gap:13px;margin-top:6px}
 .bar-item{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:12px}
 .bar-item .bl{font-size:12.5px;color:var(--text-2);font-weight:600;display:flex;align-items:center;gap:7px}
