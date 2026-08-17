@@ -171,6 +171,25 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .composer{display:flex;gap:12px;align-items:flex-start;padding:16px}
 .composer textarea{flex:1;border:1px solid var(--border);border-radius:var(--radius-s);padding:11px 13px;background:var(--surface-2);color:var(--text-1);resize:vertical;min-height:52px;outline:none}
 .composer textarea:focus{border-color:var(--brand)}
+.pin-chip{color:var(--brand);font-weight:700}
+.post-img{display:block;max-width:100%;max-height:420px;border-radius:10px;margin:10px 0 2px;cursor:pointer}
+.mural-imgprev{align-items:center;gap:10px;margin-top:8px}
+.mural-imgprev img{max-height:90px;border-radius:8px;border:1px solid var(--border)}
+.poll-in{display:block;width:100%;margin-top:6px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--surface-2);color:var(--text-1);outline:none;font:inherit}
+.poll-in:focus{border-color:var(--brand)}
+.poll-add{margin-top:6px}
+.poll{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.poll-opt{position:relative;border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.poll-opt:hover,.poll-opt.mine{border-color:var(--brand)}
+.poll-fill{position:absolute;left:0;top:0;bottom:0;background:var(--brand);opacity:.13;pointer-events:none;transition:width .25s}
+.poll-lab,.poll-n{position:relative;z-index:1}
+.poll-opt.mine .poll-lab{color:var(--brand);font-weight:600}
+.poll-n{color:var(--muted);font-size:12px;white-space:nowrap}
+.poll-total{color:var(--muted);font-size:12px}
+.mention{color:var(--brand);font-weight:600}
+.mention-menu{margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface-2)}
+.mention-it{padding:8px 12px;cursor:pointer;font-size:13.5px}
+.mention-it:hover{background:rgba(127,127,127,.12)}
 .post{padding:16px}
 .post-head{display:flex;align-items:center;gap:11px;margin-bottom:11px}
 .post-head .pn{font-weight:700;font-size:13.5px}
@@ -769,8 +788,10 @@ async function loadAll(){
     liderados:assignees.filter(a=>a.task_id===r.id).map(a=>a.user_id),
     subtasks:subs.filter(s=>s.task_id===r.id).map(s=>({id:s.id,title:s.title,done:!!s.done,assignee:s.assignee_id,createdBy:s.created_by}))}));
   const comments=cm.data||[], likes=lk.data||[];
+  const _pv=await sb.from('poll_votes').select('*');const _pvotes=_pv.data||[];
   DB.posts=(po.data||[]).map(r=>({
     id:r.id,author:r.author_id,text:r.text,ts:new Date(r.created_at).getTime(),
+    pinned:!!r.pinned,image:r.image_url||null,poll:r.poll||null,mentions:r.mentions||[],votes:_pvotes.filter(v=>v.post_id===r.id),
     likes:likes.filter(l=>l.post_id===r.id).map(l=>l.user_id),
     comments:comments.filter(c=>c.post_id===r.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(c=>({id:c.id,author:c.author_id,text:c.text,ts:new Date(c.created_at).getTime()}))
   }));
@@ -852,7 +873,7 @@ function toggleNotifPanel(){
   if(!p){ p=document.createElement('div'); p.id='notifPanel'; document.body.appendChild(p); }
   if(p.style.display==='block'){ p.style.display='none'; return; }
   const list=(DB.notifs||[]);
-  p.innerHTML='<div class="np-head">🔔 Notificações</div>'+(list.length?list.map(n=>`<div class="np-item ${n.read?'':'unread'}" onclick="${n.task?`closeNotifPanel();openTaskModal('${n.task}')`:''}"><div>${esc(n.text)}</div><small>${relTime(n.at)}</small></div>`).join(''):'<div class="np-empty">Nenhuma notificação ainda.</div>');
+  p.innerHTML='<div class="np-head">🔔 Notificações</div>'+(list.length?list.map(n=>`<div class="np-item ${n.read?'':'unread'}" onclick="${n.task?`closeNotifPanel();openTaskModal('${n.task}')`:`closeNotifPanel();go('mural')`}"><div>${esc(n.text)}</div><small>${relTime(n.at)}</small></div>`).join(''):'<div class="np-empty">Nenhuma notificação ainda.</div>');
   p.style.display='block';
   markNotifsRead();
 }
@@ -1065,12 +1086,12 @@ function wireKanban(){
 /* ---------- MURAL ---------- */
 function viewMural(){
   return `<div class="mural">
-    <div class="card composer">${avatar(currentUser)}<div style="flex:1"><textarea id="muralText" placeholder="Compartilhe um comunicado, ${esc((currentProfile?.name||'').split(' ')[0])}..."></textarea><div style="display:flex;justify-content:flex-end;margin-top:9px"><button class="btn sm" onclick="publishPost()">Publicar</button></div></div></div>
-    ${DB.posts.slice().sort((a,b)=>b.ts-a.ts).map(m=>{
+    <div class="card composer">${avatar(currentUser)}<div style="flex:1"><textarea id="muralText" placeholder="Compartilhe um comunicado, ${esc((currentProfile?.name||'').split(' ')[0])}..."></textarea><div id="muralImgPrev" class="mural-imgprev" style="display:none"></div><div id="pollEditor" style="display:none;margin-top:8px"><input class="poll-in" placeholder="Opção 1" maxlength="60"><input class="poll-in" placeholder="Opção 2" maxlength="60"><button class="pact poll-add" onclick="addPollOpt()">+ opção</button></div><div id="mentionMenu" class="mention-menu" style="display:none">${DB.people.filter(p=>p.id!==currentUser).map(p=>`<div class="mention-it" onclick="insertMention('${p.id}')">${esc(p.name)}</div>`).join('')}</div><div style="display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap"><button class="pact" onclick="pickMuralImg()">📷 Foto</button><button class="pact" onclick="togglePollEditor()">📊 Enquete</button><button class="pact" onclick="toggleMentionMenu()">@ Mencionar</button><span style="flex:1"></span><button class="btn sm" onclick="publishPost()">Publicar</button></div><input type="file" id="muralImgInput" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" onchange="muralImgChosen(this)"></div></div>
+    ${DB.posts.slice().sort((a,b)=>((b.pinned?1:0)-(a.pinned?1:0))||(b.ts-a.ts)).map(m=>{
       const liked=m.likes.includes(currentUser);
       return `<div class="card post" style="margin-top:14px">
-        <div class="post-head">${avatar(m.author)}<div><div class="pn">${esc(person(m.author).name)}</div><div class="pw">${esc(person(m.author).role)} · ${relTime(m.ts)} atrás</div></div>${canDeletePost(m)?`<button class="icon-btn" title="Excluir mensagem" onclick="delPost('${m.id}')" style="margin-left:auto;color:var(--critical)">🗑</button>`:''}</div>
-        <div class="post-body">${esc(m.text)}</div>
+        <div class="post-head">${avatar(m.author)}<div><div class="pn">${esc(person(m.author).name)}</div><div class="pw">${esc(person(m.author).role)} · ${relTime(m.ts)} atrás${m.pinned?' · <span class="pin-chip">📌 Fixado</span>':''}</div></div>${isManager()?`<button class="icon-btn" title="${m.pinned?'Desafixar':'Fixar no topo'}" onclick="togglePin('${m.id}')" style="margin-left:auto${m.pinned?';color:var(--brand)':''}">📌</button>`:''}${canDeletePost(m)?`<button class="icon-btn" title="Excluir mensagem" onclick="delPost('${m.id}')" style="margin-left:auto;color:var(--critical)">🗑</button>`:''}</div>
+        <div class="post-body">${muralBody(m)}</div>${m.image?`<img class="post-img" loading="lazy" src="${esc(m.image)}" alt="Imagem da publicação" onclick="window.open(this.src,'_blank')">`:''}${m.poll?pollHtml(m):''}
         <div class="post-actions"><button class="pact ${liked?'liked':''}" onclick="toggleLike('${m.id}')">${liked?'♥':'♡'} ${m.likes.length||''} Curtir</button><button class="pact" onclick="document.getElementById('ci_${m.id}').focus()">💬 ${m.comments.length||''} Comentar</button></div>
         ${m.comments.length?`<div class="comments">${m.comments.map(c=>`<div class="comment">${avatar(c.author,'sm')}<div class="cb"><div class="cn">${esc(person(c.author).name)}</div><div class="ct">${esc(c.text)}</div></div>${canDeleteComment(c)?`<button class="icon-btn" title="Excluir comentário" onclick="delComment('${c.id}','${m.id}')" style="margin-left:auto;color:var(--critical);width:24px;height:24px">🗑</button>`:''}</div>`).join('')}</div>`:''}
         <div class="comment-input">${avatar(currentUser,'sm')}<input id="ci_${m.id}" placeholder="Escreva um comentário..." onkeydown="if(event.key==='Enter')addComment('${m.id}',this.value)"></div>
@@ -1078,7 +1099,110 @@ function viewMural(){
     }).join('')}
   </div>`;
 }
-async function publishPost(){const t=$('#muralText').value.trim();if(!t)return;await sb.from('posts').insert({author_id:currentUser,text:t});await reload();}
+function muralBody(m){
+  let h=esc(m.text||'');
+  const marks=[];
+  (m.mentions||[]).forEach(uid=>{
+    const p=person(uid); if(!p||!p.name) return;
+    ['@'+p.name,'@'+p.name.split(' ')[0]].forEach(tok=>{
+      const t=esc(tok);
+      if(t.length>1&&h.indexOf(t)>=0){ marks.push(t); h=h.split(t).join('\u0001'+(marks.length-1)+'\u0002'); }
+    });
+  });
+  marks.forEach((t,i)=>{ h=h.split('\u0001'+i+'\u0002').join('<span class="mention">'+t+'</span>'); });
+  return h;
+}
+function pollHtml(m){
+  const opts=(m.poll&&m.poll.options)||[]; if(!opts.length) return '';
+  const votes=m.votes||[]; const total=votes.length;
+  const mv=votes.find(v=>v.user_id===currentUser); const mine=mv?mv.option_idx:null;
+  return '<div class="poll">'+opts.map((o,i)=>{
+    const n=votes.filter(v=>v.option_idx===i).length;
+    const pct=total?Math.round(n*100/total):0;
+    return '<div class="poll-opt '+(mine===i?'mine':'')+'" onclick="votePoll(\''+m.id+'\','+i+')"><div class="poll-fill" style="width:'+pct+'%"></div><span class="poll-lab">'+(mine===i?'✓ ':'')+esc(o)+'</span><span class="poll-n">'+n+' · '+pct+'%</span></div>';
+  }).join('')+'<div class="poll-total">'+total+(total===1?' voto':' votos')+' · clique para votar (ou desfazer)</div></div>';
+}
+async function votePoll(id,idx){
+  const m=DB.posts.find(p=>p.id===id); if(!m) return;
+  const mv=(m.votes||[]).find(v=>v.user_id===currentUser);
+  if(mv&&mv.option_idx===idx){ await sb.from('poll_votes').delete().eq('post_id',id).eq('user_id',currentUser); }
+  else{ const {error}=await sb.from('poll_votes').upsert({post_id:id,user_id:currentUser,option_idx:idx}); if(error){ showToast('⚠️ '+traduz(error.message||'')); return; } }
+  await reload();
+}
+async function togglePin(id){
+  const m=DB.posts.find(p=>p.id===id); if(!m||!isManager()) return;
+  const {error}=await sb.from('posts').update({pinned:!m.pinned}).eq('id',id);
+  if(error){ showToast('⚠️ '+traduz(error.message||'')); return; }
+  showToast(m.pinned?'Mensagem desafixada.':'📌 Mensagem fixada no topo.');
+  await reload();
+}
+function togglePollEditor(){ const pe=$('#pollEditor'); if(pe) pe.style.display=(pe.style.display==='none')?'block':'none'; }
+function addPollOpt(){
+  const pe=$('#pollEditor'); if(!pe) return;
+  const n=pe.querySelectorAll('.poll-in').length;
+  if(n>=4){ showToast('Máximo de 4 opções.'); return; }
+  const i=document.createElement('input'); i.className='poll-in'; i.placeholder='Opção '+(n+1); i.maxLength=60;
+  pe.insertBefore(i,pe.querySelector('.poll-add'));
+}
+function muralPollFromEditor(){
+  const pe=$('#pollEditor'); if(!pe||pe.style.display==='none') return null;
+  const opts=[...pe.querySelectorAll('.poll-in')].map(x=>x.value.trim()).filter(Boolean);
+  return opts.length>=2?{options:opts.slice(0,4)}:null;
+}
+function toggleMentionMenu(){ const mm=$('#mentionMenu'); if(mm) mm.style.display=(mm.style.display==='none')?'block':'none'; }
+function insertMention(uid){
+  const ta=$('#muralText'); const p=person(uid); if(!ta||!p||!p.name) return;
+  window._muralMentions=window._muralMentions||[];
+  if(!window._muralMentions.includes(uid)) window._muralMentions.push(uid);
+  ta.value=(ta.value?ta.value.replace(/\s*$/,' '):'')+'@'+p.name.trim()+' ';
+  toggleMentionMenu(); ta.focus();
+}
+function pickMuralImg(){ const i=$('#muralImgInput'); if(i) i.click(); }
+async function muralImgChosen(inp){
+  const f=inp.files&&inp.files[0]; inp.value=''; if(!f) return;
+  if(f.size>5*1024*1024){ showToast('⚠️ A imagem pode ter no máximo 5 MB.'); return; }
+  const head=new Uint8Array(await f.slice(0,12).arrayBuffer());
+  const hx=[...head].map(b=>b.toString(16).padStart(2,'0')).join('');
+  const ok=hx.startsWith('ffd8ff')||hx.startsWith('89504e47')||hx.startsWith('47494638')||(hx.startsWith('52494646')&&hx.slice(16,24)==='57454250');
+  if(!ok){ showToast('⚠️ O arquivo não é uma imagem válida (jpg, png, gif ou webp).'); return; }
+  window._muralImgFile=f;
+  const pv=$('#muralImgPrev');
+  if(pv){ pv.innerHTML='<img src="'+URL.createObjectURL(f)+'" alt=""><button class="pact" onclick="clearMuralImg()">✕ remover foto</button>'; pv.style.display='flex'; }
+}
+function clearMuralImg(){ window._muralImgFile=null; const pv=$('#muralImgPrev'); if(pv){ pv.innerHTML=''; pv.style.display='none'; } }
+async function uploadMuralImage(){
+  const f=window._muralImgFile; if(!f) return null;
+  const ext=((f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,''))||'jpg';
+  const path=currentUser+'/'+Date.now()+'.'+ext;
+  const {error}=await sb.storage.from('mural').upload(path,f,{contentType:f.type||'image/jpeg',upsert:false});
+  if(error){ showToast('⚠️ Falha ao enviar a imagem: '+traduz(error.message||'')); return false; }
+  return sb.storage.from('mural').getPublicUrl(path).data.publicUrl;
+}
+async function publishPost(){
+  const t=$('#muralText').value.trim();
+  const poll=muralPollFromEditor();
+  const pe=$('#pollEditor');
+  if(pe&&pe.style.display!=='none'&&!poll){ showToast('⚠️ A enquete precisa de pelo menos 2 opções preenchidas.'); return; }
+  if(!t&&!window._muralImgFile&&!poll) return;
+  let image_url=null;
+  if(window._muralImgFile){ image_url=await uploadMuralImage(); if(image_url===false) return; }
+  const mentions=(window._muralMentions||[]).filter(uid=>{ const p=person(uid); return !!(p&&p.name&&(t.indexOf('@'+p.name)>=0||t.indexOf('@'+p.name.split(' ')[0])>=0)); });
+  (DB.people||[]).forEach(p=>{
+    if(!p.name||p.id===currentUser||mentions.includes(p.id)) return;
+    if(t.indexOf('@'+p.name)>=0){ mentions.push(p.id); return; }
+    const fn=p.name.split(' ')[0];
+    if(fn&&t.indexOf('@'+fn)>=0&&(DB.people||[]).filter(q=>q.name&&q.name.split(' ')[0]===fn).length===1) mentions.push(p.id);
+  });
+  const {error}=await sb.from('posts').insert({author_id:currentUser,text:t,image_url:image_url,poll:poll,mentions:mentions});
+  if(error){ showToast('⚠️ '+traduz(error.message||'Não foi possível publicar.')); return; }
+  try{
+    const rows=[...new Set(mentions)].filter(uid=>uid!==currentUser).map(uid=>({user_id:uid,actor_id:currentUser,task_id:null,text:shortName(currentUser)+' te mencionou no mural: "'+t.slice(0,60)+(t.length>60?'…':'')+'"'}));
+    if(rows.length) await sb.from('notifications').insert(rows);
+  }catch(e){}
+  window._muralMentions=[]; clearMuralImg();
+  await reload();
+  showToast('Publicado no mural.');
+}
 async function toggleLike(id){const m=DB.posts.find(p=>p.id===id);if(m.likes.includes(currentUser)){await sb.from('likes').delete().eq('post_id',id).eq('user_id',currentUser);}else{await sb.from('likes').insert({post_id:id,user_id:currentUser});}await reload();}
 async function addComment(id,v){v=v.trim();if(!v)return;await sb.from('comments').insert({post_id:id,author_id:currentUser,text:v});await reload();}
 function canDeleteComment(c){ if(!c) return false; if(c.author===currentUser) return true; if(isAdmin()) return true; if(myLevel==='gerente' && person(c.author).level!=='admin') return true; return false; } async function delComment(id,postId){ if(!confirm('Excluir este comentário?')) return; const {error}=await sb.from('comments').delete().eq('id',id); if(error){ showToast('⚠️ '+(error.message||'Não foi possível excluir.')); return; } showToast('Comentário excluído.'); await reload(); } function canDeletePost(m){
