@@ -768,7 +768,10 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   sb.auth.onAuthStateChange((event,session)=>{
     if(event==='PASSWORD_RECOVERY'){ recoveryMode=true; if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
     if(recoveryMode){ if(session&&session.user) currentUser=session.user.id; showNewPassword(); return; }
-    if(session && session.user){ if(!currentUser){ currentUser=session.user.id; boot(); } }
+    /* compara o id, não só "tem alguém logado": um link de confirmação de e-mail
+       troca o dono da sessão no meio do caminho, e com `!currentUser` o sistema
+       continuava carregado como a pessoa anterior — gravando no nome errado. */
+    if(session && session.user){ if(currentUser!==session.user.id){ currentUser=session.user.id; boot(); } }
     else if(event==='SIGNED_OUT'||event==='INITIAL_SESSION'){ currentUser=null; showAuth(); }
   });
   const cfq=new URLSearchParams(window.location.search).get('confirm');
@@ -783,7 +786,11 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     if(session && session.user){ currentUser=session.user.id; showNewPassword(); }
     else { recoveryMode=false; showAuth(); authMsg('O link de recuperação expirou ou é inválido. Use "Esqueci minha senha" para receber um novo.','err'); }
   }
-  else if(session && session.user){ currentUser=session.user.id; boot(); }
+  /* O onAuthStateChange acima costuma chegar com INITIAL_SESSION antes daqui e
+     já ter iniciado o boot(). Sem esta guarda o sistema carregava tudo do banco
+     duas vezes a cada abertura (48 requisições em vez de 24). Compara o id pelo
+     mesmo motivo da guarda lá de cima. */
+  else if(session && session.user){ if(currentUser!==session.user.id){ currentUser=session.user.id; boot(); } }
   else { showAuth(); }
   document.getElementById('auPass').addEventListener('keydown',e=>{if(e.key==='Enter')authSubmit();});
   document.getElementById('npPass2').addEventListener('keydown',e=>{if(e.key==='Enter')saveNewPassword();});
@@ -916,6 +923,7 @@ async function saveNewPassword(){
 }
 
 async function boot(){
+ try{
   document.getElementById('authWrap').classList.add('hidden');
   const np=document.getElementById('newpassWrap'); if(np) np.classList.add('hidden');
   await ensureProfile();
@@ -927,6 +935,15 @@ async function boot(){
   renderAll();
   if(confirmMsg){ showToast(confirmMsg); confirmMsg=null; }
   maybeBirthday();
+ }catch(e){
+  /* Sem isto a pessoa fica olhando uma tela vazia para sempre: o login já foi
+     escondido, o app abriu vazio e nenhum evento de sessão consegue tentar de
+     novo. Zerar o currentUser também libera uma nova tentativa automática. */
+  console.error('[boot]',e);
+  currentUser=null;
+  showAuth();
+  authMsg('Não foi possível carregar o sistema. Recarregue a página (F5). Se continuar, avise o Gabriel.','err');
+ }
 }
 function showWaiting(){
   document.getElementById('authWrap').classList.add('hidden');
