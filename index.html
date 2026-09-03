@@ -409,6 +409,151 @@ input,textarea,select{font-family:inherit;font-size:14px}
 .fchips{display:inline-flex;gap:6px;flex-wrap:wrap;vertical-align:middle}
 .fchips .chip{border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:12.5px;background:var(--surface-1);color:var(--text-2);font-weight:650;cursor:pointer}
 .fchips .chip.on{background:var(--brand-wash);border-color:var(--brand);color:var(--brand)}
+/* ---------- Aniversário (animação de boas-vindas) ---------- */
+#bdayWrap{position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(130% 105% at 50% 118%,#ff8ec4 0%,#f0559b 26%,#c22a72 50%,#7a1449 74%,#3d0b26 100%);
+  opacity:0;transition:opacity .55s ease;-webkit-tap-highlight-color:transparent}
+#bdayWrap.on{display:flex}
+#bdayWrap.vis{opacity:1}
+#bdayWrap.out{opacity:0;pointer-events:none}
+#bdayCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bday-card{position:relative;z-index:2;max-width:min(560px,92vw);width:100%;text-align:center;
+  padding:34px 30px 26px;border-radius:22px;
+  background:linear-gradient(180deg,rgba(88,10,52,.52),rgba(60,6,36,.62));
+  border:1px solid rgba(255,255,255,.30);
+  box-shadow:0 24px 70px rgba(70,5,40,.50),inset 0 1px 0 rgba(255,255,255,.28);
+  animation:bdayIn .85s cubic-bezier(.16,1,.3,1) both}
+.bday-cake{font-size:46px;line-height:1;display:block;margin-bottom:12px;animation:bdayPop 2.6s ease-in-out infinite}
+.bday-kicker{font-size:13.5px;letter-spacing:.08em;color:rgba(255,255,255,.78);margin-bottom:8px}
+.bday-title{font-family:"Chakra Petch",system-ui,sans-serif;font-weight:700;color:#fff;
+  font-size:clamp(30px,7.2vw,46px);line-height:1.06;margin:0 0 4px;text-shadow:0 2px 24px rgba(120,0,60,.45)}
+.bday-name{font-family:"Chakra Petch",system-ui,sans-serif;font-weight:700;
+  font-size:clamp(38px,10vw,66px);line-height:1.02;margin:0;
+  background:linear-gradient(92deg,#fff0a8,#ffd75e 34%,#ffffff 62%,#fff0a8);
+  background-size:220% 100%;filter:drop-shadow(0 4px 20px rgba(255,215,94,.35));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:bdayShine 6s linear infinite}
+.bday-msg{margin:16px auto 0;max-width:400px;font-size:15px;line-height:1.55;color:rgba(255,255,255,.90)}
+.bday-from{margin-top:10px;font-size:12.5px;color:rgba(255,255,255,.68)}
+.bday-close{margin-top:22px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.16);
+  color:#fff;font:inherit;font-size:14px;font-weight:600;padding:11px 26px;border-radius:999px;cursor:pointer;
+  transition:background .18s ease,transform .18s ease}
+.bday-close:hover{background:rgba(255,255,255,.28)}
+.bday-close:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.bday-close:active{transform:scale(.97)}
+@keyframes bdayIn{from{opacity:0;transform:translateY(26px) scale(.92);filter:blur(8px)}to{opacity:1;transform:none;filter:none}}
+@keyframes bdayShine{to{background-position:220% 0}}
+@keyframes bdayPop{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(4deg)}}
+@media (prefers-reduced-motion: reduce){
+  .bday-card,.bday-cake,.bday-name{animation:none}
+  #bdayCanvas{display:none}
+}
+@media (forced-colors: active){
+  .bday-name{color:CanvasText;background:none;filter:none;-webkit-text-fill-color:CanvasText}
+}
+
+/* ---------- Menu recolhido (gaveta) ------------------------------------------
+   O menu lateral vira gaveta: sai da frente por padrão e devolve 248px de tela.
+   Abre pelo botão de 3 riscos + logo na barra de cima; fecha ao escolher uma
+   tela, clicar fora ou apertar Esc. Quem prefere o menu à vista clica em
+   "Fixar" — e o sistema lembra (localStorage ng-menu).
+   Fixar só existe a partir de 901px: abaixo disso não há coluna para o menu,
+   e permitir fixar deixava a pessoa sem navegação nenhuma (e lembrava disso).
+   A gaveta vale em TODA largura — é o que tapa o buraco antigo de 761–900px,
+   onde o menu já tinha sumido e a barra de baixo ainda não tinha aparecido.
+--------------------------------------------------------------------------- */
+.app{grid-template-columns:1fr}
+#navScrim{position:fixed;inset:0;z-index:110;background:rgba(11,11,11,.5);
+  opacity:0;pointer-events:none;transition:opacity .22s}
+#navScrim.on{opacity:1;pointer-events:auto}
+:root[data-theme="dark"] #navScrim{background:rgba(0,0,0,.62)}
+:root[data-theme="dark"] .sidebar.aberto{box-shadow:0 0 0 1px rgba(255,255,255,.16),16px 0 44px rgba(0,0,0,.65)}
+
+/* a gaveta existe em qualquer largura, inclusive onde o CSS antigo a escondia */
+.sidebar{display:flex !important;position:fixed;top:0;left:0;bottom:0;width:min(264px,86vw);z-index:120;
+  transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1);
+  box-shadow:none;overflow-y:auto;overscroll-behavior:contain}
+.sidebar.aberto{transform:none;box-shadow:0 0 0 1px var(--border),12px 0 40px rgba(0,0,0,.18)}
+.sidebar[inert]{visibility:hidden}
+.sidebar.aberto[inert]{visibility:visible}
+
+/* menu fixado — só a partir de 901px (ver .menu-fixo aplicado pelo JS) */
+.app.menu-fixo{grid-template-columns:248px 1fr}
+.app.menu-fixo .sidebar{position:relative;transform:none;width:auto;z-index:1;box-shadow:none;visibility:visible}
+.app.menu-fixo #navScrim{display:none}
+.app.menu-fixo .menu-abre .logo{display:none}
+.app.menu-fixo .side-fechar{display:none}
+
+/* botão de 3 riscos + logo */
+.menu-abre{display:flex;align-items:center;gap:9px;padding:5px 11px 5px 7px;border-radius:11px;
+  background:transparent;border:1px solid transparent;cursor:pointer;transition:.13s;flex:0 0 auto}
+.menu-abre:hover{background:var(--surface-3);border-color:var(--border)}
+.menu-abre:active{transform:scale(.97)}
+.menu-abre .riscos{width:20px;height:14px;display:flex;flex-direction:column;justify-content:space-between;flex:0 0 auto}
+.menu-abre .riscos i{display:block;height:2px;border-radius:2px;background:var(--text-1);transition:.18s}
+.menu-abre:hover .riscos i{background:var(--brand)}
+.menu-abre .logo{width:28px;height:28px;border-radius:8px;font-size:15px}
+.topbar h1{line-height:1.15}
+
+/* cabeçalho da gaveta: nome numa linha, botões na linha de baixo — assim o
+   "Sistema do escritório" não quebra e nada cai em cima do nome. */
+.sidebar .brand{display:grid;grid-template-columns:34px 1fr;align-items:center;column-gap:10px;row-gap:10px;padding:6px 8px 14px}
+.sidebar .brand .logo{grid-row:1;grid-column:1}
+.sidebar .brand .name{grid-row:1;grid-column:2;min-width:0}
+.sidebar .brand .name small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-top{grid-row:2;grid-column:1/-1;display:flex;align-items:center;gap:6px;
+  padding-top:10px;border-top:1px solid var(--border-2)}
+.side-top .cresce{flex:1}
+.side-top button{height:30px;min-width:30px;padding:0 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;
+  color:var(--text-2);font-size:12.5px;font-weight:650;transition:.12s;background:transparent;border:1px solid var(--border);cursor:pointer}
+.side-top button:hover{background:var(--surface-3);color:var(--text-1);border-color:var(--border)}
+.side-top button.on{background:var(--brand-wash);color:var(--brand);border-color:var(--brand)}
+.side-top .lbl{font-size:11.5px}
+@media (max-width:900px){ .side-top #pinBtn{display:none} }
+
+/* o rodapé antigo do menu foi para a barra de cima — some de vez */
+.sidebar .userbox[hidden]{display:none !important}
+
+/* avatar na barra de cima, com menuzinho */
+.userbtn{display:flex;align-items:center;gap:9px;padding:4px 10px 4px 4px;border-radius:22px;
+  border:1px solid var(--border);background:var(--surface-1);cursor:pointer;transition:.13s;flex:0 0 auto}
+.userbtn:hover{background:var(--surface-3);border-color:var(--brand)}
+.userbtn .un{font-weight:700;font-size:12.5px;color:var(--text-1);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.userbtn .ch{color:var(--muted);font-size:10px;transition:.18s}
+.userbtn[aria-expanded="true"] .ch{transform:rotate(180deg)}
+#userMenu{position:fixed;z-index:130;min-width:216px;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);
+  padding:6px;display:none}
+#userMenu.on{display:block}
+#userMenu .um-head{padding:9px 11px 10px;border-bottom:1px solid var(--border-2);margin-bottom:5px}
+#userMenu .um-nm{font-weight:750;font-size:13.5px}
+#userMenu .um-rl{font-size:11.5px;color:var(--muted);margin-top:1px}
+#userMenu button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text-1);
+  background:transparent;border:0;cursor:pointer;transition:.12s}
+#userMenu button:hover,#userMenu button:focus-visible{background:var(--surface-3)}
+#userMenu button.sair{color:var(--critical)}
+#userMenu button.sair:hover,#userMenu button.sair:focus-visible{background:var(--crit-wash)}
+#userMenu .um-ic{width:19px;text-align:center;font-size:14px;flex:0 0 auto}
+
+/* a barra de cima ganhou o avatar: a busca encolhe em vez de cortar texto */
+@media (min-width:761px){
+  .topbar>div:first-of-type{min-width:0;flex:0 1 auto}
+  .topbar h1,.topbar .sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .search{width:clamp(190px,22vw,300px);flex:0 1 auto}
+}
+@media (min-width:761px) and (max-width:1150px){
+  .userbtn .un{max-width:80px}
+  #primaryLabel{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .sub{display:none}
+}
+@media (max-width:760px){
+  .userbtn .un{display:none} .userbtn{padding:3px;border-radius:50%}
+  .menu-abre .logo{display:none}       /* espaço para a busca no celular */
+  .menu-abre{padding:6px 8px}
+}   /* o subtítulo é enfeite; cortado pela metade é pior que ausente */
+}
+
 </style>
 </head>
 <body>
@@ -464,22 +609,31 @@ input,textarea,select{font-family:inherit;font-size:14px}
 
 <!-- ============ APP ============ -->
 <div class="app hidden" id="appRoot">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <div class="logo lgimg">NG</div>
       <div class="name gwm">Galuno <span>Escritório</span><small>Sistema do escritório</small></div>
+      <div class="side-top">
+        <button id="pinBtn" onclick="fixarMenu()" aria-pressed="false"><span aria-hidden="true">📌</span><span class="lbl" id="pinLbl">Fixar o menu</span></button>
+        <span class="cresce"></span>
+        <button class="side-fechar" onclick="abrirMenu(false)" title="Fechar o menu" aria-label="Fechar o menu">✕</button>
+      </div>
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-spacer"></div>
-    <div class="userbox">
+    <div class="userbox" hidden>
       <div class="av sm" id="curAv"></div>
       <div class="info"><div class="un" id="curName"></div><div class="ur" id="curRole"></div></div>
-      <button class="logout" id="themeBtn" title="Tema claro/escuro" onclick="toggleTheme()">🌙</button><button class="logout" title="Sair" onclick="doLogout()">⎋</button>
+      <button class="logout" id="themeBtn" title="Tema" onclick="toggleTheme()">🌙</button><button class="logout" title="Sair" onclick="doLogout()">⎋</button>
     </div>
   </aside>
 
   <main class="main">
     <div class="topbar">
+      <button class="menu-abre" id="menuBtn" onclick="abrirMenu()" title="Abrir o menu" aria-label="Abrir o menu" aria-expanded="false" aria-controls="sidebar">
+        <span class="riscos" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="logo lgimg" aria-hidden="true">NG</span>
+      </button>
       <div>
         <h1 id="pageTitle">Painel</h1>
         <div class="sub" id="pageSub"></div>
@@ -488,10 +642,15 @@ input,textarea,select{font-family:inherit;font-size:14px}
       <button class="icon-btn" id="notifBell" title="Notificações" onclick="toggleNotifPanel()" style="position:relative;font-size:16px">🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--critical);color:#fff;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 5px;min-width:16px;text-align:center">0</span></button>
       <div class="search"><span>🔍</span><input id="search" placeholder="Buscar tarefas..." oninput="onSearch(this.value)"></div>
       <button class="btn" id="primaryBtn" onclick="primaryAction()"><span>＋</span><span id="primaryLabel">Nova tarefa</span></button>
+      <button class="userbtn" id="userBtn" onclick="abrirMenuUsuario()" aria-haspopup="true" aria-expanded="false" title="Sua conta">
+        <span class="av sm" id="curAv2"></span><span class="un" id="curName2"></span><span class="ch">▾</span>
+      </button>
     </div>
     <div class="content" id="view"></div>
   </main>
   <nav class="mtabs" id="mtabs"></nav>
+  <div id="navScrim" onclick="abrirMenu(false)" aria-hidden="true"></div>
+  <div id="userMenu" role="menu"></div>
   <div class="msheet-wrap" id="msheetWrap" onclick="if(event.target===this)toggleMoreSheet(false)"><div class="msheet" id="msheet"></div></div>
 </div>
 
@@ -562,7 +721,9 @@ function detectAuthRedirect(){
 function showToast(msg){
   const t=document.createElement('div');
   t.textContent=msg;
-  t.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--good);color:#fff;padding:12px 22px;border-radius:10px;font-weight:650;font-size:14px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.22)';
+  /* no topo o aviso tapava a busca e o botão principal; vai para baixo. */
+  t.style.cssText='position:fixed;bottom:86px;left:50%;transform:translateX(-50%);background:var(--good);color:#fff;padding:12px 22px;border-radius:10px;font-weight:650;font-size:14px;z-index:900;box-shadow:0 8px 24px rgba(0,0,0,.22);max-width:min(92vw,520px);text-align:center';
+  if(/^⚠️/.test(msg)){ t.style.background='var(--critical)'; t.style.fontWeight='700'; }
   document.body.appendChild(t);
   setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},4200);
 }
@@ -743,6 +904,7 @@ async function boot(){
   subscribeRealtime();
   renderAll();
   if(confirmMsg){ showToast(confirmMsg); confirmMsg=null; }
+  maybeBirthday();
 }
 function showWaiting(){
   document.getElementById('authWrap').classList.add('hidden');
@@ -911,9 +1073,13 @@ function renderNav(){
   $('#curAv').style.background=c;$('#curAv').textContent=initials(currentProfile?.name||'?');
   $('#curName').textContent=currentProfile?.name||'';
   $('#curRole').textContent=currentProfile?.role||'';
+  const a2=document.getElementById('curAv2'), n2=document.getElementById('curName2');
+  if(a2){ a2.style.background=c; a2.textContent=initials(currentProfile?.name||'?'); }
+  if(n2) n2.textContent=shortName(currentUser)||currentProfile?.name||'';
+  aplicarMenuFixo();
   renderTabs();
 }
-function go(r){route=r;currentProject=null;searchTerm='';$('#search').value='';toggleMoreSheet(false);renderView();renderNav();}
+function go(r){route=r;currentProject=null;searchTerm='';$('#search').value='';toggleMoreSheet(false);abrirMenu(false);fecharMenuUsuario();renderView();renderNav();}
 function onSearch(v){searchTerm=v.toLowerCase();if(route==='tarefas'||route==='painel')renderView();}
 
 const TITLES={painel:['Painel','Visão geral do escritório'],tarefas:['Tarefas','Todas as tarefas da equipe'],projetos:['Projetos','Quadros e progresso'],mural:['Mural da equipe','Comunicados e interação'],equipe:['Equipe','Pessoas do escritório'],calendario:['Calendário','Prazos do mês'],rotinas:['Rotinas','Tarefas recorrentes do escritório']};
@@ -1360,7 +1526,7 @@ function onLeaderChange(v){
   window._liderados=(window._liderados||[]).filter(u=>u!==v);
   const c=$('#liderChips'); if(c) c.innerHTML=liderChipsHtml(v);
 }
-function parseLink(s){s=(s||'').trim();if(!s)return null;if(s.charAt(0)==='{'){try{const o=JSON.parse(s);return {d:(o.d||'').trim(),u:(o.u||'').trim()};}catch(e){}}const m=s.match(/^(.*\S)\s+[-–—]\s+((?:https?:\/\/|www\.)\S.*)$/i);if(m)return {d:m[1].trim(),u:m[2].trim()};return {d:'',u:s};} function renderTaskLinks(){const box=document.getElementById('linksList');if(!box)return;const L=window._taskLinks||[];box.innerHTML=L.length?L.map((x,i)=>`<div class="linkrow"><a href="${lhref(x.u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${x.d?esc(x.d)+' — ':''}${esc(x.u)}</a><button type="button" class="linkdel" onclick="removeTaskLink(${i})" title="Remover">✕</button></div>`).join(''):'<div class="linkempty">Nenhum anexo ainda.</div>';} function addTaskLink(){const uu=document.getElementById('f_linkUrl');if(!uu)return;const u=(uu.value||'').trim();if(!u){uu.style.borderColor='var(--critical)';return;}uu.style.borderColor='';const du=document.getElementById('f_linkDesc');const d=(du&&du.value||'').trim();window._taskLinks=window._taskLinks||[];window._taskLinks.push({d,u});if(du)du.value='';uu.value='';renderTaskLinks();if(du)du.focus();} function removeTaskLink(i){if(!window._taskLinks)return;window._taskLinks.splice(i,1);renderTaskLinks();} function collectTaskLinks(){const uu=document.getElementById('f_linkUrl');if(uu&&uu.value.trim()){const du=document.getElementById('f_linkDesc');window._taskLinks=window._taskLinks||[];window._taskLinks.push({d:(du?du.value.trim():''),u:uu.value.trim()});if(du)du.value='';uu.value='';}return (window._taskLinks||[]).map(x=>JSON.stringify({d:x.d||'',u:x.u||''}));} function lhref(u){u=(u||'').trim();return /^https?:\/\//i.test(u)?u:'https://'+u;} function linkify(x){return (x||'').replace(/((https?:\/\/|www\.)[^\s<]+)/gi,m=>'<a href="'+(/^https?:/i.test(m)?m:'https://'+m)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+m+'</a>');} function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
+function parseLink(s){s=(s||'').trim();if(!s)return null;if(s.charAt(0)==='{'){try{const o=JSON.parse(s);return {d:(o.d||'').trim(),u:(o.u||'').trim()};}catch(e){}}const m=s.match(/^(.*\S)\s+[-–—]\s+((?:https?:\/\/|www\.)\S.*)$/i);if(m)return {d:m[1].trim(),u:m[2].trim()};return {d:'',u:s};} function renderTaskLinks(){const box=document.getElementById('linksList');if(!box)return;const L=window._taskLinks||[];box.innerHTML=L.length?L.map((x,i)=>`<div class="linkrow"><a href="${lhref(x.u)}" target="_blank" rel="noopener" class="linkchip">🔗 ${x.d?esc(x.d)+' — ':''}${esc(x.u)}</a><button type="button" class="linkdel" onclick="removeTaskLink(${i})" title="Remover">✕</button></div>`).join(''):'<div class="linkempty">Nenhum anexo ainda.</div>';} function addTaskLink(){const uu=document.getElementById('f_linkUrl');if(!uu)return;const u=(uu.value||'').trim();if(!u){uu.style.borderColor='var(--critical)';return;}uu.style.borderColor='';const du=document.getElementById('f_linkDesc');const d=(du&&du.value||'').trim();window._taskLinks=window._taskLinks||[];window._taskLinks.push({d,u});if(du)du.value='';uu.value='';renderTaskLinks();if(du)du.focus();} function removeTaskLink(i){if(!window._taskLinks)return;window._taskLinks.splice(i,1);renderTaskLinks();} function collectTaskLinks(){const uu=document.getElementById('f_linkUrl');if(uu&&uu.value.trim()){const du=document.getElementById('f_linkDesc');window._taskLinks=window._taskLinks||[];window._taskLinks.push({d:(du?du.value.trim():''),u:uu.value.trim()});if(du)du.value='';uu.value='';}return (window._taskLinks||[]).map(x=>JSON.stringify({d:x.d||'',u:x.u||''}));} function lhref(u){u=(u||'').trim();return esc(/^https?:\/\//i.test(u)?u:'https://'+u);} function linkify(x){return (x||'').replace(/((https?:\/\/|www\.)[^\s<]+)/gi,m=>'<a href="'+(/^https?:/i.test(m)?m:'https://'+m)+'" target="_blank" rel="noopener" style="color:var(--brand)">'+m+'</a>');} function autoGrow(el){if(!el)return;el.style.height='auto';el.style.height=(el.scrollHeight)+'px';} async function updateSubAssignee(subId,taskId,val){const {error}=await sb.from('subtasks').update({assignee_id:val||null}).eq('id',subId);if(error){showToast('⚠️ Sem permissão para alterar o responsável.');return;} await refreshSubs(taskId);} function subAssigneeOptions(sel){
   const ppl=DB.people.filter(p=>p.level!=='novo');
   return `<option value="">Sem responsável</option>`+ppl.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.name)}</option>`).join('');
 }
@@ -1606,6 +1772,341 @@ async function saveProject(){const n=$('#f_pname').value.trim();if(!n){$('#f_pna
   window._pedit=null;closeModal();await reload();}
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+
+/* ---------- Menu recolhido (gaveta) ----------------------------------------
+   Estado em localStorage 'ng-menu': 'fixo' = menu sempre à vista (como era
+   antes); qualquer outra coisa = gaveta, que é o padrão.
+   Fixar SÓ vale a partir de 901px: abaixo disso não existe coluna para o menu,
+   e deixar fixar apagava a navegação inteira — e o sistema lembrava disso.
+--------------------------------------------------------------------------- */
+/* qual tema vem a seguir — usado para o menuzinho dizer o destino, não a origem.
+   O mkt.js sobrescreve isto para incluir o rosa. */
+function proximoTema(){ return currentTheme()==='dark' ? {ic:'☀️',label:'claro'} : {ic:'🌙',label:'escuro'}; }
+const LARG_FIXAVEL=901;
+function cabeFixar(){ return window.innerWidth>=LARG_FIXAVEL; }
+function menuFixoSalvo(){ try{ return localStorage.getItem('ng-menu')==='fixo'; }catch(e){ return false; } }
+function menuFixo(){ return menuFixoSalvo() && cabeFixar(); }
+function aplicarMenuFixo(){
+  const app=document.getElementById('appRoot'), pin=document.getElementById('pinBtn'),
+        lbl=document.getElementById('pinLbl'), bt=document.getElementById('menuBtn'), f=menuFixo();
+  if(app) app.classList.toggle('menu-fixo',f);
+  if(pin){ pin.classList.toggle('on',f); pin.setAttribute('aria-pressed',f?'true':'false');
+           pin.title=f?'Soltar o menu (volta a ser gaveta)':'Deixar o menu sempre à vista'; }
+  if(lbl) lbl.textContent=f?'Soltar o menu':'Fixar o menu';
+  /* fixado, o botão de 3 riscos vira "recolher" — nunca um botão morto */
+  if(bt){ bt.title=f?'Recolher o menu':'Abrir o menu';
+          bt.setAttribute('aria-label',bt.title); }
+  if(f){ const sb=document.getElementById('sidebar'), sc=document.getElementById('navScrim');
+         if(sb){ sb.classList.remove('aberto'); sb.removeAttribute('inert'); sb.removeAttribute('aria-hidden'); }
+         if(sc) sc.classList.remove('on'); }
+  else { const sb=document.getElementById('sidebar');
+         if(sb && !sb.classList.contains('aberto')) fecharParaTeclado(sb); }
+}
+/* gaveta fechada não pode roubar o Tab */
+function fecharParaTeclado(sb){ try{ sb.setAttribute('inert',''); }catch(e){} sb.setAttribute('aria-hidden','true'); }
+function fixarMenu(){
+  if(!cabeFixar()){
+    showToast('⚠️ Nesta largura de tela não cabe o menu fixo — ele continua como gaveta.');
+    return;
+  }
+  const novo=!menuFixoSalvo();
+  try{ localStorage.setItem('ng-menu',novo?'fixo':'gaveta'); }catch(e){}
+  aplicarMenuFixo();
+  showToast(novo?'Menu fixado — fica sempre à vista.':'Menu solto — abre pelo botão de 3 riscos.');
+}
+let _menuAntes=null;
+function abrirMenu(forcar){
+  const sb=document.getElementById('sidebar'), sc=document.getElementById('navScrim'), bt=document.getElementById('menuBtn');
+  if(!sb) return;
+  if(menuFixo()){                       /* fixado: o botão recolhe em vez de não fazer nada */
+    if(forcar===undefined) fixarMenu();
+    return;
+  }
+  const abrir = forcar===undefined ? !sb.classList.contains('aberto') : !!forcar;
+  if(abrir && !sb.classList.contains('aberto')) _menuAntes=document.activeElement;
+  sb.classList.toggle('aberto',abrir);
+  if(abrir){ sb.removeAttribute('inert'); sb.removeAttribute('aria-hidden'); } else fecharParaTeclado(sb);
+  if(sc) sc.classList.toggle('on',abrir);
+  if(bt) bt.setAttribute('aria-expanded',abrir?'true':'false');
+  if(abrir){ const a=sb.querySelector('#nav button'); if(a) setTimeout(()=>a.focus(),60); }
+  else if(_menuAntes && document.contains(_menuAntes)){ try{_menuAntes.focus();}catch(e){} _menuAntes=null; }
+}
+/* setas andam pelos itens, e o foco não escapa da gaveta aberta */
+document.addEventListener('keydown',e=>{
+  const sb=document.getElementById('sidebar');
+  if(!sb||!sb.classList.contains('aberto')||menuFixo()) return;
+  const itens=[...sb.querySelectorAll('button:not([disabled])')].filter(x=>x.getBoundingClientRect().width>0);
+  if(!itens.length) return;
+  const i=itens.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    const n=e.key==='ArrowDown'?1:-1;
+    itens[((i<0?0:i)+n+itens.length)%itens.length].focus();
+  } else if(e.key==='Tab'){
+    if(e.shiftKey && document.activeElement===itens[0]){ e.preventDefault(); itens[itens.length-1].focus(); }
+    else if(!e.shiftKey && document.activeElement===itens[itens.length-1]){ e.preventDefault(); itens[0].focus(); }
+  }
+});
+window.addEventListener('resize',()=>{ aplicarMenuFixo(); fecharMenuUsuario(); });
+/* ---------- Menuzinho do usuário na barra de cima ---------- */
+function fecharMenuUsuario(){
+  const m=document.getElementById('userMenu'), b=document.getElementById('userBtn');
+  if(m) m.classList.remove('on');
+  if(b) b.setAttribute('aria-expanded','false');
+}
+function abrirMenuUsuario(){
+  const m=document.getElementById('userMenu'), b=document.getElementById('userBtn');
+  if(!m||!b) return;
+  if(m.classList.contains('on')) return fecharMenuUsuario();
+  const prox=(typeof proximoTema==='function')?proximoTema():{ic:'🌙',label:'escuro'};
+  const nome=(currentProfile&&currentProfile.name)||'', func=(currentProfile&&currentProfile.role)||'';
+  m.innerHTML='<div class="um-head"><div class="um-nm">'+esc(nome)+'</div><div class="um-rl">'+esc(func)+'</div></div>'+
+    '<button role="menuitem" onclick="fecharMenuUsuario();toggleTheme()"><span class="um-ic">'+prox.ic+'</span>Mudar para o tema '+esc(prox.label)+'</button>'+
+    (cabeFixar()?'<button role="menuitem" onclick="fecharMenuUsuario();fixarMenu()"><span class="um-ic">📌</span>'+(menuFixo()?'Soltar o menu':'Fixar o menu à vista')+'</button>':'')+
+    '<button role="menuitem" class="sair" onclick="fecharMenuUsuario();doLogout()"><span class="um-ic">⎋</span>Sair da conta</button>';
+  const r=b.getBoundingClientRect();
+  m.style.top=(r.bottom+8)+'px';
+  m.style.left='auto'; m.style.right=Math.max(8,window.innerWidth-r.right)+'px';
+  m.classList.add('on'); b.setAttribute('aria-expanded','true');
+  const p=m.querySelector('button'); if(p) setTimeout(()=>p.focus(),40);
+}
+document.addEventListener('click',e=>{
+  const m=document.getElementById('userMenu'), b=document.getElementById('userBtn');
+  if(m&&m.classList.contains('on')&&!m.contains(e.target)&&b&&!b.contains(e.target)) fecharMenuUsuario();
+},true);
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  /* a comemoração de aniversário está por cima de tudo: ela fecha primeiro */
+  if(document.getElementById('bdayWrap')) return;
+  const m=document.getElementById('userMenu');
+  if(m&&m.classList.contains('on')){ e.stopPropagation(); fecharMenuUsuario(); const b=document.getElementById('userBtn'); if(b)b.focus(); return; }
+  const w=document.getElementById('msheetWrap');
+  if(w&&w.classList.contains('open')){ e.stopPropagation(); toggleMoreSheet(false); return; }
+  const sb=document.getElementById('sidebar');
+  if(sb&&sb.classList.contains('aberto')){ e.stopPropagation(); abrirMenu(false); }
+},true);
+
+/* ---------- Aniversário ----------------------------------------------------
+   Mostra uma comemoração em tela cheia quando a pessoa entra no sistema no dia
+   dela. Aparece uma vez por dia e só para a própria pessoa.
+   Nada aqui grava no banco nem lê dado de ninguém.
+
+   Para incluir alguém: pegue o id do perfil, rode no console
+       bdayHash('<id-do-perfil>')
+   e acrescente { h: <numero>, dia:'MM-DD' } na lista abaixo. O nome mostrado
+   vem do próprio perfil (currentProfile), por isso não guardamos id nem nome
+   aqui — este arquivo é público.
+--------------------------------------------------------------------------- */
+/* Confere de novo quando a pessoa volta para a aba e quando o dia vira:
+   sem isto, quem deixa a aba aberta desde a véspera nunca veria a animação. */
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && typeof currentUser!=='undefined' && currentUser) maybeBirthday(); });
+setInterval(()=>{ try{ if(typeof currentUser!=='undefined' && currentUser) maybeBirthday(); }catch(e){} }, 300000);
+function bdayHash(s){ let h=7; s=String(s||''); for(let i=0;i<s.length;i++) h=(Math.imul(h,31)+s.charCodeAt(i))>>>0; return h; }
+const ANIVERSARIOS=[
+  {h:189808116,dia:'09-04'}   /* Aline */
+];
+function aniversarioDeHoje(){
+  try{
+    if(!currentUser) return null;
+    const d=new Date();
+    const md=String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const hu=bdayHash(currentUser);
+    return ANIVERSARIOS.find(a=>a.h===hu&&a.dia===md)||null;
+  }catch(e){ console.warn('[bday]',e); return null; }
+}
+let _bdayJaMostrou=null;
+function maybeBirthday(){
+  try{
+    /* guardamos o DIA em que já mostramos, não um "já mostrou" para sempre:
+       se a aba ficar aberta da véspera para o dia dela, a virada conta. */
+    if(_bdayJaMostrou===todayStr()) return;
+    if(!aniversarioDeHoje()) return;
+    _bdayJaMostrou=todayStr();
+    const key='ng-bday-'+todayStr();
+    try{ if(localStorage.getItem(key)) return; }catch(e){ console.warn('[bday] storage',e); }
+    const nome=(currentProfile&&currentProfile.name)||'';
+    const abrir=()=>{ try{ playBirthday(nome,null,key); }catch(e){ console.warn('[bday]',e); } };
+    /* se a aba estiver em segundo plano, espera ela voltar — senão a animação
+       rodaria sem ninguém ver e o dia seria marcado como já comemorado */
+    if(document.visibilityState==='visible'){ setTimeout(abrir,500); }
+    else{
+      const onVis=()=>{ if(document.visibilityState==='visible'){ document.removeEventListener('visibilitychange',onVis); setTimeout(abrir,400); } };
+      document.addEventListener('visibilitychange',onVis);
+    }
+  }catch(e){ console.warn('[bday]',e); }
+}
+let _bdayEl=null,_bdayRaf=null,_bdayTimer=null,_bdayGone=null,_bdayKey=null,_bdayResize=null,_bdayFoco=null,_bdayCalma=null,_bdayVis=null,_bdayCalmo=false;
+function closeBirthday(){
+  if(_bdayRaf){ cancelAnimationFrame(_bdayRaf); _bdayRaf=null; }
+  if(_bdayTimer){ clearTimeout(_bdayTimer); _bdayTimer=null; }
+  if(_bdayCalma){ clearTimeout(_bdayCalma); _bdayCalma=null; }
+  if(_bdayVis){ document.removeEventListener('visibilitychange',_bdayVis); _bdayVis=null; }
+  _bdayCalmo=false;
+  if(_bdayGone){ clearTimeout(_bdayGone); _bdayGone=null; }
+  if(_bdayKey){ document.removeEventListener('keydown',_bdayKey,true); _bdayKey=null; }
+  if(_bdayResize){ window.removeEventListener('resize',_bdayResize); _bdayResize=null; }
+  const el=_bdayEl; _bdayEl=null;
+  const foco=_bdayFoco; _bdayFoco=null;
+  const app=document.getElementById('appRoot');
+  if(app) app.removeAttribute('aria-hidden');
+  if(!el) return;
+  el.classList.add('out');
+  _bdayGone=setTimeout(()=>{ if(el&&el.parentNode) el.parentNode.removeChild(el); _bdayGone=null; },650);
+  try{ if(foco&&foco.focus) foco.focus(); }catch(e){}
+}
+function playBirthday(nome,ms,storageKey){
+  closeBirthday();
+  const dur=Math.max(3000,ms||20000);   /* quanto tempo os fogos continuam saindo */
+  const primeiro=String(nome||'').trim().split(' ')[0]||'';
+  const w=document.createElement('div');
+  w.id='bdayWrap';
+  w.setAttribute('role','dialog');
+  w.setAttribute('aria-modal','true');
+  w.setAttribute('aria-label','Feliz aniversário'+(primeiro?', '+primeiro:''));
+  w.innerHTML='<canvas id="bdayCanvas" aria-hidden="true"></canvas>'+
+    '<div class="bday-card">'+
+      '<span class="bday-cake" aria-hidden="true">🎂</span>'+
+      '<div class="bday-kicker">Hoje é um dia especial</div>'+
+      '<div class="bday-title">Feliz aniversário,</div>'+
+      '<div class="bday-name">'+esc(primeiro)+'!</div>'+
+      '<p class="bday-msg">Que o seu ano seja leve, cheio de conquistas e de motivos pra comemorar.</p>'+
+      '<div class="bday-from">com carinho, equipe Galuno 💛</div>'+
+      '<button class="bday-close" type="button">Obrigada! 🎉</button>'+
+    '</div>';
+  document.body.appendChild(w);
+  _bdayEl=w;
+  try{ _bdayFoco=document.activeElement; }catch(e){ _bdayFoco=null; }
+  const app=document.getElementById('appRoot');
+  if(app) app.setAttribute('aria-hidden','true');
+
+  w.classList.add('on');
+  /* dois frames: garante que a transição de opacidade realmente aconteça */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(_bdayEl!==w) return;
+    w.classList.add('vis');
+    if(storageKey){ try{ localStorage.setItem(storageKey,'1'); }catch(e){} }
+  }));
+
+  const btn=w.querySelector('.bday-close');
+  if(btn){ btn.addEventListener('click',closeBirthday); try{ btn.focus({preventScroll:true}); }catch(e){} }
+  _bdayKey=e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeBirthday(); } };
+  document.addEventListener('keydown',_bdayKey,true);
+  /* A tela fica até a pessoa clicar em "Obrigada!" (ou apertar Esc).
+     Só a animação para: depois de `dur` os fogos e o confete param de ser
+     lançados, e o desenho congela quando não há mais nada se mexendo — assim
+     o cartão continua na tela sem manter o notebook dela girando o cooler. */
+
+  const reduz=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cv=w.querySelector('#bdayCanvas');
+  if(reduz||!cv||!cv.getContext) return;
+  const ctx=cv.getContext('2d');
+  if(!ctx) return;
+  let W=0,H=0,dpr=1,_rz=null;
+  function size(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=w.clientWidth||window.innerWidth; H=w.clientHeight||window.innerHeight;
+    cv.width=Math.max(1,Math.round(W*dpr)); cv.height=Math.max(1,Math.round(H*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  size();
+  _bdayResize=()=>{ clearTimeout(_rz); _rz=setTimeout(size,180); };
+  window.addEventListener('resize',_bdayResize);
+
+  const CORES=['#fff3b0','#ffffff','#ffd75e','#ffb3d9','#c9b6ff','#8fe3ff','#8ff5c4'];
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const pick=()=>CORES[(Math.random()*CORES.length)|0];
+  const foguetes=[],faisca=[],confete=[];
+
+  function lancar(){
+    const x=rnd(W*0.10,W*0.90);
+    const alvo=rnd(H*0.08,H*0.44);
+    foguetes.push({x:x,y:H+10,px:x,py:H+10,vx:rnd(-.5,.5),vy:-Math.sqrt(2*0.14*Math.max(40,H-alvo)),alvo:alvo,cor:pick()});
+  }
+  function estourar(x,y,cor){
+    const n=Math.round(rnd(64,92)), base=rnd(2.4,4.8);
+    for(let i=0;i<n;i++){
+      const ang=Math.random()*Math.PI*2, vel=base*rnd(.25,1.15);
+      faisca.push({x:x,y:y,px:x,py:y,vx:Math.cos(ang)*vel,vy:Math.sin(ang)*vel,
+        cor:Math.random()<.25?'#ffffff':cor,vida:1,dec:rnd(.0075,.0145),g:rnd(.030,.052)});
+    }
+  }
+  function soltarConfete(cima){
+    confete.push({x:rnd(-20,W+20),y:cima?rnd(-H,0):rnd(-50,-10),w:rnd(5,10),h:rnd(9,16),
+      vy:rnd(1.2,2.9),vx:rnd(-.6,.6),rot:Math.random()*Math.PI,vr:rnd(-.10,.10),
+      cor:pick(),bal:rnd(.5,1.4),f:Math.random()*100});
+  }
+  for(let i=0;i<55;i++) soltarConfete(true);
+  lancar(); lancar();
+
+  const t0=performance.now();
+  let proxFogo=600, proxConf=0;
+  function frame(t){
+    const dt=t-t0;
+    ctx.clearRect(0,0,W,H);
+
+    if(dt<dur-1500&&dt>proxFogo&&!_bdayCalmo){
+      proxFogo=dt+rnd(280,620);
+      lancar();
+      if(Math.random()<.35) lancar();
+    }
+    if(dt<dur-1100&&dt>proxConf&&confete.length<170&&!_bdayCalmo){ proxConf=dt+40; soltarConfete(false); }
+
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineCap='round';
+
+    ctx.lineWidth=2.6;
+    for(let i=foguetes.length-1;i>=0;i--){
+      const r=foguetes[i];
+      r.px=r.x; r.py=r.y;
+      r.vy+=0.14; r.x+=r.vx; r.y+=r.vy;
+      if(r.vy>=0||r.y<=r.alvo){ estourar(r.x,r.y,r.cor); foguetes.splice(i,1); continue; }
+      ctx.globalAlpha=.9; ctx.strokeStyle=r.cor;
+      ctx.beginPath(); ctx.moveTo(r.px,r.py); ctx.lineTo(r.x,r.y); ctx.stroke();
+    }
+
+    ctx.lineWidth=2.4;
+    for(let i=faisca.length-1;i>=0;i--){
+      const p=faisca[i];
+      p.px=p.x; p.py=p.y;
+      p.vy+=p.g; p.vx*=0.982; p.vy*=0.982;
+      p.x+=p.vx; p.y+=p.vy; p.vida-=p.dec;
+      if(p.vida<=0||p.y>H+40){ faisca.splice(i,1); continue; }
+      ctx.globalAlpha=Math.max(p.vida,0);
+      ctx.strokeStyle=p.cor;
+      ctx.beginPath(); ctx.moveTo(p.px,p.py); ctx.lineTo(p.x,p.y); ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation='source-over';
+    for(let i=confete.length-1;i>=0;i--){
+      const c=confete[i];
+      /* depois que a festa acaba, o que resta cai mais rápido: assim a tela
+         congela em poucos segundos em vez de ficar 15s desenhando papelzinho. */
+      if(_bdayCalmo) c.vy=Math.min(c.vy*1.06+0.25,26);
+      c.f+=0.06; c.y+=c.vy; c.x+=c.vx+Math.sin(c.f)*c.bal; c.rot+=c.vr;
+      if(c.y>H+30){ confete.splice(i,1); continue; }
+      ctx.globalAlpha=.95;
+      ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.rot);
+      ctx.fillStyle=c.cor; ctx.fillRect(-c.w/2,-c.h/2,c.w,c.h*Math.abs(Math.cos(c.f)));
+      ctx.restore();
+    }
+    ctx.globalAlpha=1;
+    /* nada mais se mexendo e o tempo de festa acabou: para de desenhar.
+       O cartão e o botão "Obrigada!" continuam na tela. */
+    if(_bdayCalmo && !faisca.length && !confete.length && !foguetes.length){ _bdayRaf=null; return; }
+    _bdayRaf=requestAnimationFrame(frame);
+  }
+  _bdayRaf=requestAnimationFrame(frame);
+  /* para de lançar depois de `dur`, ou assim que a aba sai da frente */
+  _bdayCalma=setTimeout(()=>{ _bdayCalmo=true; },dur);
+  _bdayVis=()=>{ if(document.visibilityState!=='visible') _bdayCalmo=true; };
+  document.addEventListener('visibilitychange',_bdayVis);
+}
+/* prévia manual (não grava nada): no console do navegador, testarAniversario('Aline') */
+window.testarAniversario=function(n,ms){ playBirthday(n||(currentProfile&&currentProfile.name)||'Aline',ms); };
+window.closeBirthday=closeBirthday;
+window.bdayHash=bdayHash;
 </script>
+<script src="/mkt.js"></script>
 </body>
 </html>
