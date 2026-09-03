@@ -158,6 +158,38 @@ input,textarea,select{font-family:inherit;font-size:clamp(17px,0.921vw + 4.415px
 .ttable .title-cell{font-weight:600;font-size:clamp(16px,0.838vw + 4.559px,26px)}
 .ttable .title-cell small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--muted);font-weight:400;font-size:clamp(16px,0.838vw + 4.559px,26px);margin-top:1px}
 .icon-btn{width:clamp(34px,2.1vw,52px);height:clamp(34px,2.1vw,52px);font-size:clamp(15px,.9vw + 2px,24px);border-radius:7px;display:grid;place-items:center;color:var(--muted);transition:.12s}
+/* A barra inteira clica: o que está DENTRO de um botão é decoração e não pode
+   roubar o clique.
+
+   Atenção: pointer-events é HERDADO. Não basta excluir o filho direto — um
+   `span` sem onclick pode conter uma pastilha clicável, e ela herda o `none`.
+   Por isso vem primeiro a regra que desliga, e depois a que RELIGA tudo que
+   tem função própria (clique, foco, link, campo) ou tooltip próprio, em
+   qualquer profundidade. */
+button > span:not(.no-pe),
+button > i,
+button > b,
+button > small,
+button > .av,
+button > .tag,
+button > .dot,
+button > svg,
+[role="button"] > span:not(.no-pe),
+[role="button"] > i,
+[role="button"] > b,
+[role="button"] > small{pointer-events:none}
+
+/* Aqui o !important é o certo: não é preferência de estilo, é impedir que a
+   regra de cima desligue algo que TEM função (clique, foco, link, campo) ou
+   tooltip próprio. Contar especificidade à mão neste caso é frágil — qualquer
+   seletor novo lá em cima quebraria a conta em silêncio. */
+button :is([onclick],[role="button"],[tabindex],a,input,select,textarea,button,[title],.no-pe),
+[role="button"] :is([onclick],[role="button"],[tabindex],a,input,select,[title],.no-pe),
+.no-pe{pointer-events:auto !important}
+/* o campo de data mostra que o campo todo abre o calendário */
+input[type=date],input[type=month],input[type=time],input[type=week],input[type=datetime-local]{cursor:pointer}
+input[type=date]:disabled,input[type=month]:disabled,input[type=time]:disabled,input[type=week]:disabled,input[type=datetime-local]:disabled,
+input[type=date][readonly],input[type=month][readonly],input[type=time][readonly]{cursor:default}
 .icon-btn:hover{background:var(--surface-3);color:var(--text-1)}
 
 .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
@@ -1086,6 +1118,32 @@ function shortName(id){
 const project=id=>DB.projects.find(p=>p.id===id);
 const avIndex=id=>Math.max(0,DB.people.findIndex(p=>p.id===id));
 function initials(name){return (name||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();}
+/* ---------------------------------------------------------------------------
+   Regra da casa: a barra inteira clica.
+
+   1) Campo de data — o navegador só abre o calendário quando se acerta o
+      iconezinho; clicar no texto "dd/mm/aaaa" não fazia nada. Um clique em
+      qualquer ponto do campo passa a abrir.
+   2) Botão com conteúdo dentro — ícone, avatar, pastilha, texto — o clique
+      podia cair num filho e não no botão. Os filhos deixam de interceptar.
+   --------------------------------------------------------------------------- */
+document.addEventListener('click',e=>{
+  const alvo=e.target;
+  if(!alvo||!alvo.closest) return;
+  const campo=alvo.closest('input[type=date],input[type=month],input[type=time],input[type=week],input[type=datetime-local]');
+  if(!campo||campo.disabled||campo.readOnly) return;
+  /* showPicker exige gesto do usuário e estoura se já estiver aberto */
+  try{ if(typeof campo.showPicker==='function') campo.showPicker(); }catch(err){}
+},true);
+/* teclado: quem chega no campo pelo Tab e aperta Enter também abre */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ') return;
+  const c=e.target;
+  if(!c||c.tagName!=='INPUT'||!/^(date|month|time|week|datetime-local)$/.test(c.type)) return;
+  if(c.disabled||c.readOnly) return;
+  try{ if(typeof c.showPicker==='function'){ e.preventDefault(); c.showPicker(); } }catch(err){}
+},true);
+
 /* Preto ou branco em cima de uma cor escolhida pelo usuário (cor do projeto).
    Branco sobre amarelo dá 1,9:1 — ilegível. */
 function tintaSobre(hex){
